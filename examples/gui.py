@@ -19,17 +19,25 @@ from transformations import euler_matrix, rotation_matrix, decompose_matrix, uni
 
 from concurrent.futures import ThreadPoolExecutor,as_completed
 
+def decode(container):
+    for packet in container.demux():
+        if packet.stream.type != 'video':
+            continue
+        for frame in packet.decode():
+            yield frame
+
 def read_image_data(path, width, height):
     container = av.open(path)
-    for i, frame in enumerate(container.decode(video=0)):
-        rgba = frame.reformat(width, height, format="rgba")
+    for i, frame in enumerate(decode(container)):
+        print frame
+        rgba = frame.reformat(width, height, "rgba")
         print rgba
         return meshrender.MeshTexture(rgba.planes[0], width, height)
 
 def read_image_data16(path, width, height):
     container = av.open(path)
-    for i, frame in enumerate(container.decode(video=0)):
-        rgba = frame.reformat(width, height, format="rgba64le")
+    for i, frame in enumerate(decode(container)):
+        rgba = frame.reformat(width, height, "rgba64le")
         print rgba
         return meshrender.MeshTexture(rgba.planes[0], width, height, depth=16)
 

@@ -299,8 +299,9 @@ void grow_texture_slow(Texture *ctx)
     int x_p;
     int y_p;
     int step;
+    int dir_index, x, y;
 
-    for (int dir_index = 0; dir_index < ARRAY_SIZE(dir); dir_index++) {
+    for (dir_index = 0; dir_index < ARRAY_SIZE(dir); dir_index++) {
         int x_d = dir[dir_index][0];
         int y_d = dir[dir_index][1];
 
@@ -308,7 +309,7 @@ void grow_texture_slow(Texture *ctx)
         if (x_d < 0)
             step = -1;
 
-        for (int y = 0; y < ctx->height; y++) {
+        for (y = 0; y < ctx->height; y++) {
 
             x_p = 0;
             if (x_d < 0)
@@ -325,7 +326,7 @@ void grow_texture_slow(Texture *ctx)
             float *b = ctx->b + pix_index;
             float *a = ctx->a + pix_index;
 
-            for (int x = 0; x < ctx->width; x++) {
+            for (x = 0; x < ctx->width; x++) {
 
                 test_pixel = get_pixel(ctx, x_p + x_d, y_p + y_d);
 
@@ -371,8 +372,8 @@ static inline void grow_texture_left_right(Texture *ctx, int right)
     int offset = 4;
     if (right)
         offset = -4;
-
-    for (int y = 0; y < ctx->height; y++) {
+    int x, y;
+    for (y = 0; y < ctx->height; y++) {
 
         int x_p = 0;
         if (right) {
@@ -402,14 +403,14 @@ static inline void grow_texture_left_right(Texture *ctx, int right)
         __m128 b_shift;
         __m128 a_shift;
 
-        for (int x = 0; x < ctx->width-4; x+=4) {
+        for (x = 0; x < ctx->width-4; x+=4) {
 
             __m128 sr4x = _mm_load_ps(r);
             __m128 sg4x = _mm_load_ps(g);
             __m128 sb4x = _mm_load_ps(b);
             __m128 sa4x = _mm_load_ps(a);
 
-            if (_mm_movemask_epi8(_mm_cmpeq_ps(a4x, one))  != 0xFFFF) {
+            if (_mm_movemask_epi8(_mm_castps_si128(_mm_cmpeq_ps(a4x, one)))  != 0xFFFF) {
 
                 if(right) {
                     r_shift = pix_shift_right(r4x, sr4x);
@@ -423,7 +424,7 @@ static inline void grow_texture_left_right(Texture *ctx, int right)
                     a_shift = pix_shift_left(a4x, sa4x);
                 }
 
-                if (_mm_movemask_epi8(_mm_cmpeq_ps(a_shift, zero)) != 0xFFFF ) {
+                if (_mm_movemask_epi8(_mm_castps_si128(_mm_cmpeq_ps(a_shift, zero))) != 0xFFFF ) {
 
                     __m128 alpha = _mm_sub_ps(one, a4x);
 
@@ -466,8 +467,8 @@ static inline void grow_texture_down_up(Texture *ctx, int up)
     int offset = 1;
     if (up)
         offset = -1;
-
-    for (int y = 0; y < ctx->height-1; y++) {
+    int x, y;
+    for (y = 0; y < ctx->height-1; y++) {
 
         int px_y = y;
         if (up)
@@ -487,12 +488,12 @@ static inline void grow_texture_down_up(Texture *ctx, int up)
         float *sb = ctx->b + pix_index;
         float *sa = ctx->a + pix_index;
 
-        for (int x = 0; x < ctx->width; x+=4) {
+        for (x = 0; x < ctx->width; x+=4) {
             __m128 a4x = _mm_load_ps(a);
             __m128 sa4x = _mm_load_ps(sa);
 
-            if (_mm_movemask_epi8(_mm_cmpeq_ps(a4x, one))   != 0xFFFF ||
-                _mm_movemask_epi8(_mm_cmpeq_ps(sa4x, zero)) != 0xFFFF ) {
+            if (_mm_movemask_epi8(_mm_castps_si128(_mm_cmpeq_ps(a4x, one)))   != 0xFFFF ||
+                _mm_movemask_epi8(_mm_castps_si128(_mm_cmpeq_ps(sa4x, zero))) != 0xFFFF ) {
 
                 __m128 r4x = _mm_load_ps(r);
                 __m128 g4x = _mm_load_ps(g);
@@ -533,9 +534,9 @@ static inline vec4 gausse3x3(Texture *ctx, int px, int py)
 {
     vec4 average = {};
     int g_index = 0;
-
-    for (int y= py - 1; y <= py + 1; y++) {
-        for (int x= px - 1; x <= px + 1; x++ ) {
+    int x,y;
+    for (y = py - 1; y <= py + 1; y++) {
+        for (x = px - 1; x <= px + 1; x++ ) {
             vec4 pix = get_pixel(ctx, x, y);
 
             // if (pix.w > 0) {
@@ -571,14 +572,14 @@ void blur_pixels(Texture *ctx, float *orig_a)
     src.width = ctx->width;
     src.height = ctx->width;
     copy_texture(ctx, &src);
-
-    for (int y = 0; y < ctx->height; y++) {
+    int x,y;
+    for (y = 0; y < ctx->height; y++) {
 
         int pix_index = y * ctx->width;
         float *a  = src.a + pix_index;
         float *oa = orig_a + pix_index;
 
-        for (int x = 0; x < ctx->width; x++) {
+        for (x = 0; x < ctx->width; x++) {
             if (*oa != *a) {
 
                 //printf("here %d %d\n", x,y);
@@ -743,7 +744,8 @@ static inline int rect_intersects(Rect *a, Rect *b)
 
 static inline void load_mesh_data(Triangle* p, const MeshIndex indices[3], const MeshData *mesh, int count)
 {
-    for (int i = 0; i < count; i++) {
+    int i;
+    for (i = 0; i < count; i++) {
         p->verts[i] = *((vec4*)&mesh->vertices[indices[i].v * 4]);
 
         if (mesh->coarse_levels)
@@ -765,8 +767,8 @@ static inline void load_mesh_data(Triangle* p, const MeshIndex indices[3], const
 static inline void perspective_divide(Triangle* p)
 {
     float w[3] = {p->verts[0].w, p->verts[1].w, p->verts[2].w};
-
-    for (int i =0; i < 3; i++) {
+    int i;
+    for (i =0; i < 3; i++) {
         p->verts[i].x /= w[i];
         p->verts[i].y /= w[i];
         p->verts[i].z /= w[i];
@@ -777,8 +779,8 @@ static inline void perspective_correction(Triangle* p)
 {
     float w[3] = {p->verts[0].w, p->verts[1].w, p->verts[2].w};
 
-
-    for (int i =0; i < 3; i++) {
+    int i;
+    for (i =0; i < 3; i++) {
         float inv_w = 1.0f / w[i];
         if (p->has_normals) {
             p->normals[i].x *= inv_w;
@@ -963,8 +965,8 @@ static inline void uv_to_screen_space(const RenderContext *ctx, Triangle *p, Tex
 inline void flip_triangle(Triangle* p)
 {
     Triangle tmp = *p;
-
-    for (int i =0; i < 3; i++) {
+    int i;
+    for (i =0; i < 3; i++) {
         p->verts[i] = tmp.verts[2-i];
         p->normals[i] = tmp.normals[2-i];
         p->uvs[i] = tmp.uvs[2-i];
@@ -1050,8 +1052,8 @@ void draw_triangle(RenderContext *ctx, const Triangle *tri, const Rect *clip, co
 
     vec4 p;
     m128vec4 px4;
-
-    for (int y = min_y; y <= max_y; y+=2) {
+    int i,x,y;
+    for (y = min_y; y <= max_y; y+=2) {
 
         px4.x = _mm_add_ps(_mm_set1_ps(min_x), _mm_setr_ps(0,1,0,1));
         px4.y = _mm_add_ps(_mm_set1_ps(y), _mm_setr_ps(0,0,1,1));
@@ -1059,7 +1061,7 @@ void draw_triangle(RenderContext *ctx, const Triangle *tri, const Rect *clip, co
         px4.y = _mm_min_ps(px4.y , _mm_set1_ps(clip->max.y));
         //p.y = y;
 
-        for (int x = min_x; x <= max_x; x+=2) {
+        for (x = min_x; x <= max_x; x+=2) {
             __m128 w0x4 = halfedge_x4(&v1x4, &v2x4, &px4);
             __m128 w1x4 = halfedge_x4(&v2x4, &v0x4, &px4);
             __m128 w2x4 = halfedge_x4(&v0x4, &v1x4, &px4);
@@ -1068,7 +1070,7 @@ void draw_triangle(RenderContext *ctx, const Triangle *tri, const Rect *clip, co
                               _mm_and_ps(_mm_cmpge_ps(w1x4, zero),
                                          _mm_cmpge_ps(w2x4, zero)));
             //if all are not zero at least one is inside the triangle
-            if (_mm_movemask_epi8(_mm_cmpeq_ps(inside4x, zero)) != 0xFFFF) {
+            if (_mm_movemask_epi8(_mm_castps_si128(_mm_cmpeq_ps(inside4x, zero))) != 0xFFFF) {
 
                 w0x4 = _mm_mul_ps(w0x4, area4x_inv);
                 w1x4 = _mm_mul_ps(w1x4, area4x_inv);
@@ -1078,7 +1080,7 @@ void draw_triangle(RenderContext *ctx, const Triangle *tri, const Rect *clip, co
                 px4.z = bary_blend_m128(v0x4.z, v1x4.z, v2x4.z,
                                           w0x4,   w1x4,   w2x4);
 
-                for (int i =0; i < 4; i++) {
+                for (i =0; i < 4; i++) {
                     float inside = inside4x[i];
                     p = m128vec4_get_vec4(&px4, i);
                     //p.x += i;
@@ -1482,13 +1484,14 @@ inline __m128 modf_ps(__m128 x, __m128 mod)
 
 void texture_context_to_rgba(const Texture *ctx, uint8_t *dst)
 {
+    int i;
     int size = ctx->width * ctx->height;
 
     __m128 t255 = _mm_set1_ps(255.0f);
     __m128 one = _mm_set1_ps(1);
     __m128 zero = _mm_set1_ps(0);
 
-    for (int i = 0; i < size; i+=4)
+    for (i = 0; i < size; i+=4)
     {
         __m128i r = _mm_cvtps_epi32(_mm_mul_ps(_mm_max_ps(_mm_min_ps(_mm_load_ps(&ctx->r[i]), one), zero), t255));
         __m128i g = _mm_cvtps_epi32(_mm_mul_ps(_mm_max_ps(_mm_min_ps(_mm_load_ps(&ctx->g[i]), one), zero), t255));
@@ -1506,7 +1509,7 @@ void texture_context_to_rgba(const Texture *ctx, uint8_t *dst)
     }
 }
 
-static inline __m128 channel_head(__m128i v)
+static inline __m128i channel_head(__m128i v)
 {
 
     __m128i r = _mm_slli_si128(v, 4);
@@ -1516,7 +1519,7 @@ static inline __m128 channel_head(__m128i v)
     //return _mm_shuffle_epi32(_mm_slli_si128(v, 4), _MM_SHUFFLE(2,0,1,0));;
 }
 
-static inline __m128 channel_tail(__m128i v)
+static inline __m128i channel_tail(__m128i v)
 {
     __m128i r = _mm_srli_si128(v, 8);
     r = _mm_shuffle_epi32(r, _MM_SHUFFLE(3,1,3,0));
@@ -1530,8 +1533,8 @@ void texture_context_to_rgba16(const Texture *ctx, uint8_t *dst)
     __m128 t65535 = _mm_set1_ps(65535.0f);
     __m128 one = _mm_set1_ps(1);
     __m128 zero = _mm_set1_ps(0);
-
-    for (int i = 0; i < size; i+=4)
+    int i;
+    for (i = 0; i < size; i+=4)
     {
         __m128i r = _mm_cvtps_epi32(_mm_mul_ps(_mm_max_ps(_mm_min_ps(_mm_load_ps(&ctx->r[i]), one), zero), t65535));
         __m128i g = _mm_cvtps_epi32(_mm_mul_ps(_mm_max_ps(_mm_min_ps(_mm_load_ps(&ctx->g[i]), one), zero), t65535));

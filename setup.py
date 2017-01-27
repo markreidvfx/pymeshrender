@@ -13,7 +13,7 @@ sourcefiles = [
 extensions = [Extension("meshrender",
                         sourcefiles,
                         language="c",
-                        # extra_compile_args=["-g"],
+                        extra_compile_args=["-O3"],
                         # extra_link_args=["-g"],
 
 )]

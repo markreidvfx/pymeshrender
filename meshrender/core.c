@@ -662,6 +662,22 @@ static inline vec4 get_tex_color_linear(Texture *tex, vec2 uv)
     return color;
 }
 
+void resample_texture(Texture *src, Texture *dst)
+{
+    vec2 uv;
+    vec4 c;
+    for (int y_pixel = 0; y_pixel < dst->height; y_pixel++) {
+        uv.y = y_pixel / (float)dst->height;
+        for (int x_pixel = 0; x_pixel < dst->width; x_pixel++) {
+            uv.x = x_pixel / (float)dst->width;
+
+            c = get_tex_color_linear(src, uv);
+            set_pixel(dst, x_pixel, (dst->height-1) - y_pixel, &c);
+
+        }
+    }
+}
+
 typedef struct {
     __m128 x;
     __m128 y;

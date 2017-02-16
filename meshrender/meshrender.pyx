@@ -92,6 +92,8 @@ cdef extern from "core.h" nogil:
                      unsigned char *src_a,
                      size_t width, size_t height)
 
+    cdef void resample_texture(Texture *src, Texture *dst)
+
     cdef void draw_edge(RenderContext *ctx, int* vert_indices, MeshData* mesh_data, Rect *clip, Texture *tex)
     cdef void draw_triangle_float(RenderContext *ctx, MeshIndex* mesh_indices, MeshData* mesh_data, Rect *clip, Texture *tex)
     cdef void draw_quad(RenderContext *ctx, MeshIndex* indices, const MeshData *mesh, Rect *clip, Texture *tex)
@@ -239,6 +241,13 @@ cdef class MeshTexture(object):
             for i in range(amount):
                 grow_texture(&self.ctx)
 
+    def resample(self, unsigned int width, unsigned int height):
+        cdef MeshTexture dst = MeshTexture.__new__(MeshTexture)
+        with nogil:
+            setup_texture_context(&dst.ctx, width, height)
+            resample_texture(&self.ctx, &dst.ctx)
+        return dst
+
     property rgba:
         @cython.boundscheck(False)
         def __get__(self):
@@ -250,6 +259,33 @@ cdef class MeshTexture(object):
             with nogil:
                 texture_context_to_rgba(&self.ctx, d)
 
+            return data
+    property r:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.r
+            return data
+
+    property g:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.g
+            return data
+
+    property b:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.b
+            return data
+
+    property a:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.a
             return data
 
     property rgba16:
@@ -378,11 +414,30 @@ cdef class MeshRenderer(object):
             for i in range(amount):
                 grow_texture(&self.ctx.img)
 
-    def to_texture(self):
+    def to_texture(self, width=None, height=None):
 
         cdef MeshTexture tex = MeshTexture.__new__(MeshTexture)
-        with nogil:
-            copy_texture(&self.ctx.img, &tex.ctx)
+        cdef unsigned int tex_width
+        cdef unsigned int tex_height
+
+        if width or height:
+            if not width:
+                tex_width = self.width
+            else:
+                tex_width = width
+
+            if not height:
+                tex_height = self.height
+            else:
+                tex_height = height
+
+            with nogil:
+                setup_texture_context(&tex.ctx, tex_width, tex_height)
+                resample_texture(&self.ctx.img, &tex.ctx)
+        else:
+
+            with nogil:
+                copy_texture(&self.ctx.img, &tex.ctx)
 
         return tex
 

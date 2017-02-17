@@ -81,6 +81,7 @@ cdef extern from "core.h" nogil:
     cdef void under(RenderContext *ctx, Texture *tex)
     cdef void copy_texture(Texture *src, Texture *dst)
     cdef void grow_texture(Texture *ctx)
+    cdef void grow_texture_new(Texture *ctx)
     cdef void load_packed_texture(Texture *ctx,
                      unsigned char *src,
                      size_t width, size_t height, int depth)
@@ -409,10 +410,11 @@ cdef class MeshRenderer(object):
         with nogil:
             under(&self.ctx, &tex.ctx)
 
-    def grow(self, unsigned int amount=1):
+    def grow(self, unsigned int amount=16):
         with nogil:
-            for i in range(amount):
-                grow_texture(&self.ctx.img)
+            # for i in range(amount):
+            #     grow_texture(&self.ctx.img)
+            grow_texture_new(&self.ctx.img)
 
     def to_texture(self, width=None, height=None):
 

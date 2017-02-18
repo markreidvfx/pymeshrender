@@ -477,12 +477,13 @@ static inline void grow_texture_left_right(Texture *ctx, int right)
 
                 if (_mm_movemask_epi8(_mm_castps_si128(_mm_cmpeq_ps(a_shift, zero))) != 0xFFFF ) {
 
-                    __m128 alpha = _mm_sub_ps(one, a4x);
+                    //__m128 alpha = _mm_sub_ps(one, a4x);
+                    __m128 alpha = _mm_cmpeq_ps(zero, a4x);
 
-                    __m128 result_r = _mm_add_ps(r4x, _mm_mul_ps(alpha, r_shift));
-                    __m128 result_g = _mm_add_ps(g4x, _mm_mul_ps(alpha, g_shift));
-                    __m128 result_b = _mm_add_ps(b4x, _mm_mul_ps(alpha, b_shift));
-                    __m128 result_a = _mm_add_ps(a4x, _mm_mul_ps(alpha, a_shift));
+                    __m128 result_r = _mm_or_ps(r4x, _mm_and_ps(alpha, r_shift));
+                    __m128 result_g = _mm_or_ps(g4x, _mm_and_ps(alpha, g_shift));
+                    __m128 result_b = _mm_or_ps(b4x, _mm_and_ps(alpha, b_shift));
+                    __m128 result_a = _mm_or_ps(a4x, _mm_and_ps(alpha, a_shift));
 
                     _mm_store_ps(r-offset, result_r);
                     _mm_store_ps(g-offset, result_g);
@@ -555,12 +556,13 @@ static inline void grow_texture_down_up(Texture *ctx, int up)
                 __m128 sg4x = _mm_load_ps(sg);
                 __m128 sb4x = _mm_load_ps(sb);
 
-                __m128 alpha = _mm_sub_ps(one, a4x);
+                // __m128 alpha = _mm_sub_ps(one, a4x);
+                __m128 alpha = _mm_cmpeq_ps(zero, a4x);
 
-                _mm_store_ps(r, _mm_add_ps( r4x, _mm_mul_ps( alpha, sr4x)));
-                _mm_store_ps(g, _mm_add_ps( g4x, _mm_mul_ps( alpha, sg4x)));
-                _mm_store_ps(b, _mm_add_ps( b4x, _mm_mul_ps( alpha, sb4x)));
-                _mm_store_ps(a, _mm_add_ps( a4x, _mm_mul_ps( alpha, sa4x)));
+                _mm_store_ps(r, _mm_or_ps( r4x, _mm_and_ps( alpha, sr4x)));
+                _mm_store_ps(g, _mm_or_ps( g4x, _mm_and_ps( alpha, sg4x)));
+                _mm_store_ps(b, _mm_or_ps( b4x, _mm_and_ps( alpha, sb4x)));
+                _mm_store_ps(a, _mm_or_ps( a4x, _mm_and_ps( alpha, sa4x)));
             }
 
             r+=4;
@@ -743,14 +745,25 @@ static inline void grow_average_nearest(Texture *src, Texture *dst)
 
 }
 
+static inline void replace_texture(Texture *src, Texture *dst)
+{
+    free_texture_context(dst);
+    dst->mem = src->mem;
+    dst->mem_size = src->mem_size;
+    dst->width = src->width;
+    dst->height = src->height;
+    dst->r = src->r;
+    dst->g = src->g;
+    dst->b = src->b;
+    dst->a = src->a;
+}
+
 
 void grow_texture_new(Texture *ctx)
 {
     Texture tmp1_tex;
-    // Texture tmp2_tex;
     Texture dst_tex;
     tmp1_tex.mem = NULL;
-    // tmp2_tex.mem = NULL;
     dst_tex.mem = NULL;
 
     size_t size =  ((GROW_BOARDER * 2) + GROW_BOX);
@@ -765,13 +778,11 @@ void grow_texture_new(Texture *ctx)
 
     int src_y = 0;
 
-
     for (int y =0; y < y_steps; y++) {
         int src_x = 0;
         for (int x=0; x < x_steps; x++) {
 
             Texture *a_tex = &tmp1_tex;
-            // Texture *b_tex = &tmp2_tex;
 
             int has_pixels = copy_texture_rect(ctx, a_tex,
                                          src_x - GROW_BOARDER, src_y - GROW_BOARDER,
@@ -781,11 +792,6 @@ void grow_texture_new(Texture *ctx)
                 if(!solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
 
                     for (int i = 0; i < GROW_BOARDER-4; i++) {
-                        // grow_average_nearest(a_tex, b_tex);
-                        // Texture *c = a_tex;
-                        // a_tex = b_tex;
-                        // b_tex = c;
-
                         grow_texture(a_tex);
 
                         if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
@@ -804,10 +810,8 @@ void grow_texture_new(Texture *ctx)
         src_y += GROW_BOX;
     }
 
-    copy_texture(&dst_tex, ctx);
+    replace_texture(&dst_tex, ctx);
     free_texture_context(&tmp1_tex);
-    // free_texture_context(&tmp2_tex);
-    free_texture_context(&dst_tex);
 }
 
 static inline vec4 get_tex_color(Texture *tex, vec2 uv)

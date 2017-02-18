@@ -4,7 +4,6 @@
 #include <assert.h>
 #include <stdint.h>
 #include "core.h"
-#include <x86intrin.h>
 #include <string.h>
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
@@ -204,6 +203,44 @@ void load_texure(Texture *ctx,
         }
     }
 }
+
+static inline vec4 make_vec4(float x, float y, float z, float w)
+{
+    vec4 r;
+    r.x = x;
+    r.y = y;
+    r.z = z;
+    r.w = w;
+    return r;
+}
+
+static inline vec4 add_vec4(vec4 a, vec4 b)
+{
+
+    vec4 r;
+    r.x = a.x + b.x;
+    r.y = a.y + b.y;
+    r.z = a.z + b.z;
+    r.w = a.w + b.w;
+    return r;
+}
+
+static inline vec4 div_vec4(vec4 a, vec4 b)
+{
+    vec4 r;
+    r.x = a.x / b.x;
+    r.y = a.y / b.y;
+    r.z = a.z / b.z;
+    r.w = a.w / b.w;
+    return r;
+}
+
+static inline vec4 div_vec4_f(vec4 a, float b)
+{
+    return div_vec4(a, make_vec4(b,b,b,b));
+}
+
+
 
 void under(RenderContext *rctx, Texture *tex)
 {
@@ -664,16 +701,61 @@ static inline int solid_alpha(Texture *src, int src_x, int src_y, int width, int
 #define GROW_BOARDER 20
 #define GROW_BOX 64
 
+static inline vec4 get_3x3_average_pixel(Texture *tex, int pixel_x, int pixel_y)
+{
+    int count = 0;
+    vec4 sum;
+    sum.x = 0;
+    sum.y = 0;
+    sum.z = 0;
+    sum.w = 0;
+
+    for (int y=-1; y <= 1; y++) {
+        for (int x=-1; x <= 1; x++) {
+            vec4 c = get_pixel(tex, x + pixel_x,  y + pixel_y);
+            if (c.w == 0.0f)
+                continue;
+
+            sum = add_vec4(sum, c);
+            count++;
+        }
+    }
+
+    if (count)
+        sum = div_vec4_f(sum, (float)count);
+
+
+    return sum;
+}
+
+static inline void grow_average_nearest(Texture *src, Texture *dst)
+{
+
+    for (int y=0; y < src->height; y++) {
+        for (int x=0; x < src->width; x++) {
+            vec4 c = get_pixel(src, x, y);
+            if (c.w == 0) {
+                c = get_3x3_average_pixel(src, x, y);
+            }
+            set_pixel(dst, x, y, &c);
+        }
+    }
+
+}
+
 
 void grow_texture_new(Texture *ctx)
 {
-    Texture tmp_tex;
+    Texture tmp1_tex;
+    // Texture tmp2_tex;
     Texture dst_tex;
-    tmp_tex.mem = NULL;
+    tmp1_tex.mem = NULL;
+    // tmp2_tex.mem = NULL;
     dst_tex.mem = NULL;
 
     size_t size =  ((GROW_BOARDER * 2) + GROW_BOX);
-    setup_texture_context(&tmp_tex, size, size);
+    setup_texture_context(&tmp1_tex, size, size);
+    // setup_texture_context(&tmp2_tex, size, size);
     setup_texture_context(&dst_tex, ctx->width, ctx->height);
 
     copy_texture(ctx, &dst_tex);
@@ -687,21 +769,31 @@ void grow_texture_new(Texture *ctx)
     for (int y =0; y < y_steps; y++) {
         int src_x = 0;
         for (int x=0; x < x_steps; x++) {
-            int has_pixels = copy_texture_rect(ctx, &tmp_tex,
+
+            Texture *a_tex = &tmp1_tex;
+            // Texture *b_tex = &tmp2_tex;
+
+            int has_pixels = copy_texture_rect(ctx, a_tex,
                                          src_x - GROW_BOARDER, src_y - GROW_BOARDER,
                                          0, 0, size, size);
 
             if (has_pixels) {
-                if(!solid_alpha(&tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
+                if(!solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
 
                     for (int i = 0; i < GROW_BOARDER-4; i++) {
-                        grow_texture(&tmp_tex);
-                        if (solid_alpha(&tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
+                        // grow_average_nearest(a_tex, b_tex);
+                        // Texture *c = a_tex;
+                        // a_tex = b_tex;
+                        // b_tex = c;
+
+                        grow_texture(a_tex);
+
+                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
                             break;
                         }
                     }
 
-                    copy_texture_rect(&tmp_tex, &dst_tex,
+                    copy_texture_rect(a_tex, &dst_tex,
                                       GROW_BOARDER, GROW_BOARDER,
                                       src_x, src_y, GROW_BOX, GROW_BOX);
                 }
@@ -713,7 +805,8 @@ void grow_texture_new(Texture *ctx)
     }
 
     copy_texture(&dst_tex, ctx);
-    free_texture_context(&tmp_tex);
+    free_texture_context(&tmp1_tex);
+    // free_texture_context(&tmp2_tex);
     free_texture_context(&dst_tex);
 }
 
@@ -767,36 +860,108 @@ static inline vec4 get_tex_color_linear(Texture *tex, vec2 uv)
     return color;
 }
 
-static inline vec4 add_vec4(vec4 a, vec4 b)
+void resample_texture_half(Texture *src, Texture *dst)
 {
-    vec4 r;
-    r.x = a.x + b.x;
-    r.y = a.y + b.y;
-    r.z = a.z + b.z;
-    r.w = a.w + b.w;
-    return r;
+    printf("fast half\n");
+    for (int y_pixel = 0; y_pixel < dst->height; y_pixel++) {
+        int y = y_pixel * 2;
+        for (int x_pixel = 0; x_pixel < dst->width; x_pixel++) {
+            int x = x_pixel *2;
+
+            vec4 c1 = get_pixel(src, x, y);
+            vec4 c2 = get_pixel(src, x+1, y);
+            vec4 c3 = get_pixel(src, x, y+1);
+            vec4 c4 = get_pixel(src, x+1, y+1);
+
+            vec4 c;
+            // c = div_vec4_f(add_vec4(c1, add_vec4(c2, add_vec4(c3, c4))), 4.0f);
+
+            c.sse = _mm_mul_ps(_mm_add_ps(c1.sse, _mm_add_ps(c2.sse, _mm_add_ps(c3.sse, c4.sse))), _mm_set1_ps(0.25f));
+
+            set_pixel(dst, x_pixel, y_pixel, &c);
+
+        }
+    }
 }
 
-static inline vec4 div_vec4(vec4 a, vec4 b)
+#define _MM_SHUFFLE_R(a,b,c,d) _MM_SHUFFLE(d,c,b,a)
+
+static inline __m128 get_4x8_half(float *p)
 {
-    vec4 r;
-    r.x = a.x / b.x;
-    r.y = a.y / b.y;
-    r.z = a.z / b.z;
-    r.w = a.w / b.w;
-    return r;
+
+    __m128 a = _mm_load_ps(p);
+    __m128 b = _mm_load_ps(p + 4);
+
+    __m128 mask = _mm_setr_ps(1,0,1,0);
+
+    a = _mm_add_ps(a, _mm_castsi128_ps(_mm_srli_si128(_mm_castps_si128(a), 4)));
+    a = _mm_mul_ps(a, mask);
+    a = _mm_shuffle_epi32(a, _MM_SHUFFLE_R(0,2,1,3));
+
+    b = _mm_add_ps(b, _mm_castsi128_ps(_mm_srli_si128(_mm_castps_si128(b), 4)));
+    b = _mm_mul_ps(b, mask);
+    b = _mm_shuffle_epi32(b, _MM_SHUFFLE_R(1,3,0,2));
+
+    return _mm_or_ps(a,b);
+}
+
+void resample_texture_half_sse(Texture *src, Texture *dst)
+{
+    int sw = src->width - 1;
+    int sh = src->height - 1;
+
+    printf("fast half sse\n");
+
+    float *src_channels[4];
+    float *dst_channels[4];
+
+    src_channels[0] = src->r;
+    src_channels[1] = src->g;
+    src_channels[2] = src->b;
+    src_channels[3] = src->a;
+
+    dst_channels[0] = dst->r;
+    dst_channels[1] = dst->g;
+    dst_channels[2] = dst->b;
+    dst_channels[3] = dst->a;
+
+    for (int i = 0; i < 4; i++) {
+
+        float *src_chan = src_channels[i];
+        float *dst_chan = dst_channels[i];
+
+        for (int y_pixel = 0; y_pixel < src->height; y_pixel+=2) {
+            for (int x_pixel = 0; x_pixel < src->width; x_pixel+=8) {
+                __m128 pixel4x1 = get_4x8_half(src_chan);
+                __m128 pixel4x2 = get_4x8_half(src_chan + src->width);
+                __m128 c = _mm_mul_ps(_mm_add_ps(pixel4x1, pixel4x2), _mm_set1_ps(0.25f));
+
+                _mm_store_ps(dst_chan, c);
+
+                src_chan += 8;
+                dst_chan += 4;
+            }
+            src_chan += src->width;
+        }
+    }
+
 }
 
 void resample_texture(Texture *src, Texture *dst)
 {
     vec2 uv;
-    vec4 v4;
-    v4.x = 4;
-    v4.y = 4;
-    v4.z = 4;
-    v4.w = 4;
 
-    //vec4 c;
+    if (src->width/2 == dst->width && src->height/2 == dst->height) {
+
+        if (src->width % 8 == 0) {
+            resample_texture_half_sse(src, dst);
+            return;
+        }
+
+        resample_texture_half(src, dst);
+        return;
+    }
+
 
     for (int y_pixel = 0; y_pixel < dst->height; y_pixel++) {
 
@@ -804,31 +969,8 @@ void resample_texture(Texture *src, Texture *dst)
             vec4 r;
             uv.y = (y_pixel + 0.5f) / (float)dst->height;
             uv.x = (x_pixel + 0.5f) / (float)dst->width;
-            r  =  get_tex_color_linear(src, uv);
-
-            // uv.y = (y_pixel + 0.25f) / (float)dst->height;
-            // uv.x = (x_pixel + 0.25f) / (float)dst->width;
-            //
-            // vec4 c1 = get_tex_color_linear(src, uv);
-            //
-            // uv.y = (y_pixel + 0.75f) / (float)dst->height;
-            // uv.x = (x_pixel + 0.25f) / (float)dst->width;
-            //
-            // vec4 c2 = get_tex_color_linear(src, uv);
-            //
-            // uv.y = (y_pixel + 0.25f) / (float)dst->height;
-            // uv.x = (x_pixel + 0.75f) / (float)dst->width;
-            //
-            // vec4 c3 = get_tex_color_linear(src, uv);
-            //
-            // uv.y = (y_pixel + 0.75f) / (float)dst->height;
-            // uv.x = (x_pixel + 0.75f) / (float)dst->width;
-            //
-            // vec4 c4 = get_tex_color_linear(src, uv);
-            //
-            // vec4 r = div_vec4(add_vec4(c1, add_vec4(c2, add_vec4(c3, c4))), v4);
-
-            set_pixel(dst, x_pixel, (dst->height-1) - y_pixel, &r);
+            vec4 c  =  get_tex_color_linear(src, uv);
+            set_pixel(dst, x_pixel, (dst->height-1) - y_pixel, &c);
 
         }
     }

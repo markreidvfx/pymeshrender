@@ -1,9 +1,12 @@
+#include <x86intrin.h>
 
 typedef struct {
-    float x;
-    float y;
-    float z;
-    float w;
+    union {
+    struct {float x,y,z,w;};
+    struct {float r,g,b,a;};
+    float e[4];
+    __m128 sse;
+    };
 } vec4;
 
 typedef struct {

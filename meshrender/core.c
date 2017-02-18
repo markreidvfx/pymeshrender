@@ -892,14 +892,14 @@ static inline __m128 get_4x8_half(float *p)
     __m128 a = _mm_load_ps(p);
     __m128 b = _mm_load_ps(p + 4);
 
-    __m128 mask = _mm_setr_ps(1,0,1,0);
+    __m128 mask = _mm_castsi128_ps(_mm_setr_epi32(0xFFFFFFFF,0,0xFFFFFFFF,0));
 
     a = _mm_add_ps(a, _mm_castsi128_ps(_mm_srli_si128(_mm_castps_si128(a), 4)));
-    a = _mm_mul_ps(a, mask);
+    a = _mm_and_ps(a, mask);
     a = _mm_shuffle_epi32(a, _MM_SHUFFLE_R(0,2,1,3));
 
     b = _mm_add_ps(b, _mm_castsi128_ps(_mm_srli_si128(_mm_castps_si128(b), 4)));
-    b = _mm_mul_ps(b, mask);
+    b = _mm_and_ps(b, mask);
     b = _mm_shuffle_epi32(b, _MM_SHUFFLE_R(1,3,0,2));
 
     return _mm_or_ps(a,b);
@@ -932,9 +932,9 @@ void resample_texture_half_sse(Texture *src, Texture *dst)
 
         for (int y_pixel = 0; y_pixel < src->height; y_pixel+=2) {
             for (int x_pixel = 0; x_pixel < src->width; x_pixel+=8) {
-                __m128 pixel4x1 = get_4x8_half(src_chan);
-                __m128 pixel4x2 = get_4x8_half(src_chan + src->width);
-                __m128 c = _mm_mul_ps(_mm_add_ps(pixel4x1, pixel4x2), _mm_set1_ps(0.25f));
+                __m128 a = get_4x8_half(src_chan);
+                __m128 b = get_4x8_half(src_chan + src->width);
+                __m128 c = _mm_mul_ps(_mm_add_ps(a, b), _mm_set1_ps(0.25f));
 
                 _mm_store_ps(dst_chan, c);
 

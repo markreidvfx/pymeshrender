@@ -702,6 +702,7 @@ static inline int solid_alpha(Texture *src, int src_x, int src_y, int width, int
 
 #define GROW_BOARDER 20
 #define GROW_BOX 64
+#define GROW_SIZE ((GROW_BOARDER * 2) + GROW_BOX)
 
 static inline vec4 get_3x3_average_pixel(Texture *tex, int pixel_x, int pixel_y)
 {
@@ -766,10 +767,23 @@ void grow_texture_new(Texture *ctx)
     tmp1_tex.mem = NULL;
     dst_tex.mem = NULL;
 
-    size_t size =  ((GROW_BOARDER * 2) + GROW_BOX);
-    setup_texture_context(&tmp1_tex, size, size);
-    // setup_texture_context(&tmp2_tex, size, size);
-    setup_texture_context(&dst_tex, ctx->width, ctx->height);
+#if 0
+    setup_texture_context(&tmp1_tex, GROW_SIZE, GROW_SIZE);
+#else
+    // use stack memory for temp texture
+    float texture_memory[GROW_SIZE * GROW_SIZE * 4] __attribute__((aligned(16)));
+
+    size_t channel_size = GROW_SIZE * GROW_SIZE;
+
+    tmp1_tex.width = GROW_SIZE;
+    tmp1_tex.height = GROW_SIZE;
+
+    tmp1_tex.r = &texture_memory[0];
+    tmp1_tex.g = tmp1_tex.r + channel_size;
+    tmp1_tex.b = tmp1_tex.g + channel_size;
+    tmp1_tex.a = tmp1_tex.b + channel_size;
+
+#endif
 
     copy_texture(ctx, &dst_tex);
 
@@ -786,7 +800,7 @@ void grow_texture_new(Texture *ctx)
 
             int has_pixels = copy_texture_rect(ctx, a_tex,
                                          src_x - GROW_BOARDER, src_y - GROW_BOARDER,
-                                         0, 0, size, size);
+                                         0, 0, GROW_SIZE, GROW_SIZE);
 
             if (has_pixels) {
                 if(!solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
@@ -811,7 +825,7 @@ void grow_texture_new(Texture *ctx)
     }
 
     replace_texture(&dst_tex, ctx);
-    free_texture_context(&tmp1_tex);
+    // free_texture_context(&tmp1_tex);
 }
 
 static inline vec4 get_tex_color(Texture *tex, vec2 uv)

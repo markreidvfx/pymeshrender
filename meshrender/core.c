@@ -816,11 +816,20 @@ void grow_texture_new(Texture *ctx)
                 if(!solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
 
                     for (int i = 0; i < GROW_BOARDER-4; i++) {
-                        grow_texture(a_tex);
-
-                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
+                        grow_texture_down_up(a_tex, 0);
+                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
                             break;
-                        }
+
+                        grow_texture_left_right(a_tex, 1);
+                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
+                            break;
+                        grow_texture_down_up(a_tex, 1);
+                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
+                            break;
+                        grow_texture_left_right(a_tex, 0);
+                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
+                            break;
+
                     }
 
                     copy_texture_rect(a_tex, &dst_tex,

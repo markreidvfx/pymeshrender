@@ -245,7 +245,7 @@ class Renderer(QtCore.QObject):
         #width =1280
         #height = 720
 
-        proj_scale = 2
+        proj_scale = 8
 
         self.renderer = meshrender.MeshRenderer(width, height)
         self.projection_renderer = meshrender.MeshRenderer(1024*proj_scale, 1024*proj_scale)
@@ -268,7 +268,7 @@ class Renderer(QtCore.QObject):
 
         self.use_abc_cam = False
         self.camera.aspect = width/ float(height)
-        scale = 4
+        scale = 8
         if texture:
             self.texture = read_image_data(texture, 1024 * scale, 1024 * scale)
 
@@ -435,10 +435,13 @@ class Renderer(QtCore.QObject):
         if self.bake_projection:
             print "texture bake in %f secs" % (time.time()- render_start)
 
-            self.texture = self.projection_renderer.to_texture()
             grow_start = time.time()
-            # self.texture.grow(10)
+            self.projection_renderer.grow()
             print "texture grow in %f secs" % (time.time()- grow_start)
+            # self.texture = self.projection_renderer.to_texture()
+
+            self.texture = self.projection_renderer.to_texture( self.projection_renderer.width/2,  self.projection_renderer.height/2)
+
 
             if self.save_image_future:
                 self.save_image_future.result()
@@ -446,7 +449,7 @@ class Renderer(QtCore.QObject):
 
             #self.save_image_future = self.mesh_threads.submit( save_image16, self.texture, "out.tif", "4096x4096")
             #save_image16(self.texture, "out.tif", "1024x1024")
-            #save_image16(self.texture, "out.tif", "4096x4096")
+            # save_image16(self.texture, "out.tif", "4096x4096")
 
 
             self.bake_projection = False

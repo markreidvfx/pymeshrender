@@ -12,6 +12,8 @@ import av
 
 F_MAX = float("+inf")
 F_MIN = float("-inf")
+from concurrent.futures import ThreadPoolExecutor,as_completed
+
 
 def read_image_data16(path, width=None, height=None):
     container = av.open(path)
@@ -25,15 +27,21 @@ def read_image_data16(path, width=None, height=None):
         return meshrender.MeshTexture(rgba.planes[0], width, height, depth=16)
 
 def save_image16(texture, path, resize=None):
-    i = cythonmagick.Image()
-    i.verbose=True
-    start = time.time()
-    texture.grow(20)
-    print "texture grow in %f secs" % (time.time() - start)
 
-    #print texture.width, texture.height
+
+    for i in xrange(1):
+        start = time.time()
+        texture.grow()
+        print "texture grow in %f secs" % (time.time() - start)
+    start = time.time()
+    texture = texture.to_texture(texture.width/2, texture.height/2)
+    print "resize in %f secs" % (time.time() - start)
+
+    print texture.width, texture.height
     #print texture.rgba
     start = time.time()
+    i = cythonmagick.Image()
+    i.verbose=True
     i.from_rawbuffer(bytearray(texture.rgba16), texture.width, texture.height, 'BGRA', 'short')
     print "imagemagick read data in %f secs" % (time.time()- start)
     start = time.time()
@@ -43,26 +51,26 @@ def save_image16(texture, path, resize=None):
     name, ext = os.path.splitext(path)
     if resize:
         i.filter = "Catrom"
-        start = time.time()
+        # start = time.time()
 
         #i.distort("resize", [4096,4096])
-        print i.size()
-        i.scale(resize)
+        # print i.size()
+        # i.scale(resize)
         #i.resize(resize)
-        print "resize in %f secs" % (time.time() - start)
+        # print "resize in %f secs" % (time.time() - start)
 
     if ext.lower() == ".tif":
         i.compress = "lzw"
 
 
     elif ext.lower() == '.exr':
-        start = time.time()
-        alpha = i.channel("alpha")
-        alpha.negate()
-        i.type = "TrueColor"
-        i.composite(alpha, "multiply")
-        i.composite(alpha, "copyopacity")
-        print "premult in %f secs" % (time.time() - start)
+        # start = time.time()
+        # alpha = i.channel("alpha")
+        # alpha.negate()
+        # i.type = "TrueColor"
+        # i.composite(alpha, "multiply")
+        # i.composite(alpha, "copyopacity")
+        # print "premult in %f secs" % (time.time() - start)
         i.compress = "zips"
 
 
@@ -159,9 +167,63 @@ def process_mesh(mesh, persp_matrix, camera_transform, viewport_matrix, seconds,
 
     return rmesh
 
+def mulithread_render_mesh(executor, renderer, mesh, x_tiles=4, y_tiles=4, texture=None):
+
+    x_tile_size = renderer.width / x_tiles
+    y_tile_size = renderer.height / y_tiles
+
+    miny = 0
+    maxy = y_tile_size
+    render_futures = []
+
+    for y in range(y_tiles):
+        minx = 0
+        maxx = x_tile_size
+
+        for x in range(x_tiles):
+            rect = [(minx, miny), (maxx-1, maxy-1)]
+            render_futures.append(executor.submit(renderer.render_mesh, mesh, rect=rect, texture=texture))
+            # renderer.render_mesh(mesh, rect=rect, texture=texture)
+
+            minx += x_tile_size
+            maxx += x_tile_size
+
+        miny += y_tile_size
+        maxy += y_tile_size
+
+    for r_future in as_completed(render_futures):
+        r_future.result()
+
+def mulithread_texture_grow(executor, renderer, x_tiles=4, y_tiles=4):
+
+    x_tile_size = renderer.width / x_tiles
+    y_tile_size = renderer.height / y_tiles
+
+    miny = 0
+    maxy = y_tile_size
+    render_futures = []
+
+    for y in range(y_tiles):
+        minx = 0
+        maxx = x_tile_size
+
+        for x in range(x_tiles):
+            rect = [(minx, miny), (maxx-1, maxy-1)]
+            render_futures.append(executor.submit(renderer.render_mesh, mesh, rect=rect, texture=texture))
+            # renderer.render_mesh(mesh, rect=rect, texture=texture)
+
+            minx += x_tile_size
+            maxx += x_tile_size
+
+        miny += y_tile_size
+        maxy += y_tile_size
+
+    for r_future in as_completed(render_futures):
+        r_future.result()
+
 
 def project3d(abc_path, image_path, dest_path, frame=None, subdiv_level=0, size=1024):
-
+    start = time.time()
     abc = abcmesh.open(abc_path)
     if not abc.camera_list:
         raise Exception("abc files has no cameras")
@@ -212,12 +274,17 @@ def project3d(abc_path, image_path, dest_path, frame=None, subdiv_level=0, size=
                              znear=znear, zfar=zfar), dtype=np.float32)
 
     viewport_matrix = np.matrix(meshrender.viewport_matrix(width-1, height-1), dtype=np.float32)
-    for mesh in abc.mesh_list[:1]:
-        rmesh = process_mesh(mesh, persp_matrix,
-                             camera_transform, viewport_matrix, seconds, subdiv_level)
 
-        renderer.render_mesh(rmesh, texture=image_texture)
-    start = time.time()
+    with ThreadPoolExecutor(max_workers=8) as e:
+
+        for mesh in abc.mesh_list[:1]:
+            rmesh = process_mesh(mesh, persp_matrix,
+                                 camera_transform, viewport_matrix, seconds, subdiv_level)
+
+            # renderer.render_mesh(rmesh, texture=image_texture)
+            mulithread_render_mesh(e, renderer, rmesh,  texture=image_texture)
+
+    print "projection rendered in %f secs"% ( time.time() - start)
 
     save_image16(renderer, dest_path, "%dx%d" % (size, size))
 
@@ -225,7 +292,7 @@ if __name__ == "__main__":
 
     from optparse import OptionParser
 
-    default_size = 4096
+    default_size = 1024
     # default_size = 1024
     parser = OptionParser()
     parser.add_option("--abc", dest="abc", metavar="FILE")

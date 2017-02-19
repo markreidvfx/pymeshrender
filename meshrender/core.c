@@ -686,22 +686,32 @@ static inline int copy_texture_rect(Texture *src, Texture *dst,
     // return 1;
 }
 
-static inline int solid_alpha(Texture *src, int src_x, int src_y, int width, int height)
+static inline int solid_alpha(Texture *tex, int src_x, int src_y, size_t width, size_t height)
 {
-    float alpha;
 
-    for (int y=0; y < height; y++) {
-        for (int x=0; x < width; x++) {
-            alpha = get_alpha_pixel(src, src_x + x, src_y + y);
-            if (alpha == 0.0f)
+    size_t w = MIN(tex->width, src_x + width);
+    size_t h = MIN(tex->height, src_y + height);
+
+    float *a;
+
+    for (int y=src_y; y < h; y++) {
+        size_t index = src_x + (y * tex->width);
+        a = tex->a + index;
+
+        for (int x=src_x; x < w; x++) {
+            if (*a  == 0.0f) {
+                // printf("non soild at %d %d\n", x,y);
                 return 0;
+            }
+
+            a++;
         }
     }
     return 1;
 }
 
 #define GROW_BOARDER 20
-#define GROW_BOX 64
+#define GROW_BOX 128
 #define GROW_SIZE ((GROW_BOARDER * 2) + GROW_BOX)
 
 static inline vec4 get_3x3_average_pixel(Texture *tex, int pixel_x, int pixel_y)

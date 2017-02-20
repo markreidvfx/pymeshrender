@@ -1035,10 +1035,19 @@ static inline float bary_blend(float v0, float v1, float v2, float w0, float w1,
 static inline vec4 blend_vec4(const vec4 *v0, const vec4 *v1, const vec4 *v2, float w0, float w1, float w2)
 {
     vec4 result;
+
+#if 1
+
+    result.sse = _mm_add_ps(_mm_mul_ps(v0->sse, _mm_set1_ps(w0)),
+                 _mm_add_ps(_mm_mul_ps(v1->sse, _mm_set1_ps(w1)),
+                            _mm_mul_ps(v2->sse, _mm_set1_ps(w2))));
+#else
+
     result.x = bary_blend(v0->x, v1->x, v2->x, w0, w1, w2);
     result.y = bary_blend(v0->y, v1->y, v2->y, w0, w1, w2);
     result.z = bary_blend(v0->z, v1->z, v2->z, w0, w1, w2);
     result.w = bary_blend(v0->w, v1->w, v2->w, w0, w1, w2);
+#endif
     return result;
 }
 

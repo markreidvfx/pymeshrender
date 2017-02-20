@@ -573,9 +573,9 @@ static inline int copy_texture_rect(Texture *src, Texture *dst,
 {
     vec4 c;
     int has_pixels = 0;
-
-    for (int y=0; y < height; y++) {
-        for (int x=0; x < width; x++) {
+    int x,y;
+    for (y=0; y < height; y++) {
+        for (x=0; x < width; x++) {
             c = get_pixel(src, src_x + x, src_y + y);
             set_pixel(dst, dst_x + x, dst_y + y, &c);
             if (c.w != 0.0f) {
@@ -595,12 +595,12 @@ static inline int solid_alpha(Texture *tex, int src_x, int src_y, size_t width, 
     size_t h = MIN(tex->height, src_y + height);
 
     float *a;
-
-    for (int y=src_y; y < h; y++) {
+    int x, y;
+    for (y=src_y; y < h; y++) {
         size_t index = src_x + (y * tex->width);
         a = tex->a + index;
 
-        for (int x=src_x; x < w; x++) {
+        for (x=src_x; x < w; x++) {
             if (*a  == 0.0f) {
                 // printf("non soild at %d %d\n", x,y);
                 return 0;
@@ -660,10 +660,10 @@ void grow_texture_new(Texture *ctx, Texture *dst, const Rect *clip)
     int y_steps = width / GROW_BOX;
 
     int src_y = clip->min.y;
-
-    for (int y =0; y <= y_steps; y++) {
+    int x, y, i;
+    for (y =0; y <= y_steps; y++) {
         int src_x = clip->min.x;
-        for (int x=0; x <= x_steps; x++) {
+        for (x=0; x <= x_steps; x++) {
 
             // Texture *a_tex = &tmp1_tex;
 
@@ -674,7 +674,7 @@ void grow_texture_new(Texture *ctx, Texture *dst, const Rect *clip)
             if (has_pixels) {
                 if(!solid_alpha( &tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
 
-                    for (int i = 0; i < GROW_BOARDER-4; i++) {
+                    for (i = 0; i < GROW_BOARDER-4; i++) {
                         grow_texture_down_up(&tmp_tex, 0);
                         if (solid_alpha(&tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
                             break;
@@ -757,10 +757,11 @@ static inline vec4 get_tex_color_linear(const Texture *tex, vec2 uv)
 
 void resample_texture_half(Texture *src, Texture *dst)
 {
-    printf("fast half\n");
-    for (int y_pixel = 0; y_pixel < dst->height; y_pixel++) {
+    // printf("fast half\n");
+    int x_pixel, y_pixel;
+    for (y_pixel = 0; y_pixel < dst->height; y_pixel++) {
         int y = y_pixel * 2;
-        for (int x_pixel = 0; x_pixel < dst->width; x_pixel++) {
+        for (x_pixel = 0; x_pixel < dst->width; x_pixel++) {
             int x = x_pixel *2;
 
             vec4 c1 = get_pixel(src, x, y);
@@ -790,11 +791,11 @@ static inline __m128 get_4x8_half(float *p)
 
     a = _mm_add_ps(a, _mm_castsi128_ps(_mm_srli_si128(_mm_castps_si128(a), 4)));
     a = _mm_and_ps(a, mask);
-    a = _mm_shuffle_epi32(a, _MM_SHUFFLE_R(0,2,1,3));
+    a = _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(a), _MM_SHUFFLE_R(0,2,1,3)));
 
     b = _mm_add_ps(b, _mm_castsi128_ps(_mm_srli_si128(_mm_castps_si128(b), 4)));
     b = _mm_and_ps(b, mask);
-    b = _mm_shuffle_epi32(b, _MM_SHUFFLE_R(1,3,0,2));
+    b = _mm_castsi128_ps(_mm_shuffle_epi32(_mm_castps_si128(b), _MM_SHUFFLE_R(1,3,0,2)));
 
     return _mm_or_ps(a,b);
 }
@@ -816,13 +817,14 @@ void resample_texture_half_sse(Texture *src, Texture *dst)
     dst_channels[2] = dst->b;
     dst_channels[3] = dst->a;
 
-    for (int i = 0; i < 4; i++) {
+    int i, x_pixel, y_pixel;
+    for (i = 0; i < 4; i++) {
 
         float *src_chan = src_channels[i];
         float *dst_chan = dst_channels[i];
 
-        for (int y_pixel = 0; y_pixel < src->height; y_pixel+=2) {
-            for (int x_pixel = 0; x_pixel < src->width; x_pixel+=8) {
+        for (y_pixel = 0; y_pixel < src->height; y_pixel+=2) {
+            for (x_pixel = 0; x_pixel < src->width; x_pixel+=8) {
                 __m128 a = get_4x8_half(src_chan);
                 __m128 b = get_4x8_half(src_chan + src->width);
                 __m128 c = _mm_mul_ps(_mm_add_ps(a, b), _mm_set1_ps(0.25f));
@@ -853,10 +855,10 @@ void resample_texture(Texture *src, Texture *dst)
         return;
     }
 
+    int x_pixel, y_pixel;
+    for (y_pixel = 0; y_pixel < dst->height; y_pixel++) {
 
-    for (int y_pixel = 0; y_pixel < dst->height; y_pixel++) {
-
-        for (int x_pixel = 0; x_pixel < dst->width; x_pixel++) {
+        for (x_pixel = 0; x_pixel < dst->width; x_pixel++) {
             uv.y = (y_pixel + 0.5f) / (float)dst->height;
             uv.x = (x_pixel + 0.5f) / (float)dst->width;
             vec4 c  =  get_tex_color_linear(src, uv);

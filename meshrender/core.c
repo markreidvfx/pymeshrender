@@ -1038,7 +1038,7 @@ static inline vec4 blend_vec4(const vec4 *v0, const vec4 *v1, const vec4 *v2, fl
     result.x = bary_blend(v0->x, v1->x, v2->x, w0, w1, w2);
     result.y = bary_blend(v0->y, v1->y, v2->y, w0, w1, w2);
     result.z = bary_blend(v0->z, v1->z, v2->z, w0, w1, w2);
-    result.z = bary_blend(v0->w, v1->w, v2->w, w0, w1, w2);
+    result.w = bary_blend(v0->w, v1->w, v2->w, w0, w1, w2);
     return result;
 }
 

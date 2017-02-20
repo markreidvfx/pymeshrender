@@ -29,12 +29,17 @@ def read_image_data16(path, width=None, height=None):
 def save_image16(texture, path, resize=None):
 
 
-    for i in xrange(1):
-        start = time.time()
-        texture.grow()
-        print "texture grow in %f secs" % (time.time() - start)
+    with ThreadPoolExecutor(max_workers=16) as e:
+        for i in xrange(1):
+            start = time.time()
+            # texture = texture.grow()
+
+            texture = mulithread_texture_grow(e, texture)
+            print "texture grow in %f secs" % (time.time() - start)
+
+
     start = time.time()
-    texture = texture.to_texture(texture.width/2, texture.height/2)
+    texture = texture.resample(texture.width/2, texture.height/2)
     print "resize in %f secs" % (time.time() - start)
 
     print texture.width, texture.height
@@ -194,14 +199,16 @@ def mulithread_render_mesh(executor, renderer, mesh, x_tiles=4, y_tiles=4, textu
     for r_future in as_completed(render_futures):
         r_future.result()
 
-def mulithread_texture_grow(executor, renderer, x_tiles=4, y_tiles=4):
+def mulithread_texture_grow(executor, texture, x_tiles=4, y_tiles=4):
 
-    x_tile_size = renderer.width / x_tiles
-    y_tile_size = renderer.height / y_tiles
+    x_tile_size = texture.width / x_tiles
+    y_tile_size = texture.height / y_tiles
 
     miny = 0
     maxy = y_tile_size
     render_futures = []
+
+    dest_texture = meshrender.MeshTexture(None, texture.width, texture.height)
 
     for y in range(y_tiles):
         minx = 0
@@ -209,11 +216,21 @@ def mulithread_texture_grow(executor, renderer, x_tiles=4, y_tiles=4):
 
         for x in range(x_tiles):
             rect = [(minx, miny), (maxx-1, maxy-1)]
-            render_futures.append(executor.submit(renderer.render_mesh, mesh, rect=rect, texture=texture))
+
+
+
+            # print texture.width, texture.height
+            # print rect
+            # texture.grow(16, rect=rect, dst_texture=dest_texture)
+            # if x % 2 == 0:
+            render_futures.append(executor.submit(texture.grow, 16, rect=rect, dst_texture=dest_texture))
+            # render_futures.append(executor.submit(renderer.render_mesh, mesh, rect=rect, texture=texture))
             # renderer.render_mesh(mesh, rect=rect, texture=texture)
 
             minx += x_tile_size
             maxx += x_tile_size
+
+            # return dest_texture
 
         miny += y_tile_size
         maxy += y_tile_size
@@ -221,6 +238,7 @@ def mulithread_texture_grow(executor, renderer, x_tiles=4, y_tiles=4):
     for r_future in as_completed(render_futures):
         r_future.result()
 
+    return dest_texture
 
 def project3d(abc_path, image_path, dest_path, frame=None, subdiv_level=0, size=1024):
     start = time.time()
@@ -275,7 +293,7 @@ def project3d(abc_path, image_path, dest_path, frame=None, subdiv_level=0, size=
 
     viewport_matrix = np.matrix(meshrender.viewport_matrix(width-1, height-1), dtype=np.float32)
 
-    with ThreadPoolExecutor(max_workers=8) as e:
+    with ThreadPoolExecutor(max_workers=16) as e:
 
         for mesh in abc.mesh_list[:1]:
             rmesh = process_mesh(mesh, persp_matrix,

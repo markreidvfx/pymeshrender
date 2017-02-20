@@ -81,7 +81,7 @@ cdef extern from "core.h" nogil:
     cdef void under(RenderContext *ctx, Texture *tex)
     cdef void copy_texture(Texture *src, Texture *dst)
     cdef void grow_texture(Texture *ctx)
-    cdef void grow_texture_new(Texture *ctx)
+    cdef void grow_texture_new(Texture *ctx, Texture *dst, Rect *clip)
     cdef void load_packed_texture(Texture *ctx,
                      unsigned char *src,
                      size_t width, size_t height, int depth)
@@ -233,14 +233,37 @@ cdef class MeshTexture(object):
                        unsigned int width, unsigned int height,
                        unsigned int depth = 8):
 
+
         with nogil:
             setup_texture_context(&self.ctx, width, height)
-            load_packed_texture(&self.ctx, &src[0], width, height, depth)
 
-    def grow(self, unsigned int amount=1):
+        if not src is None:
+            with nogil:
+                load_packed_texture(&self.ctx, &src[0], width, height, depth)
+
+    def grow(self, unsigned int amount=16, rect=None, MeshTexture dst_texture=None):
+
+        if dst_texture is None:
+            dst_texture = MeshTexture(None, self.width, self.height)
+
+        cdef Rect clip
+
+        clip.min.x = 0
+        clip.min.y = 0
+
+        clip.max.x = dst_texture.width - 1
+        clip.max.y = dst_texture.height -1
+
+        if rect:
+            clip.min.x = rect[0][0]
+            clip.min.y = rect[0][1]
+            clip.max.x = rect[1][0]
+            clip.max.y = rect[1][1]
+
         with nogil:
-            for i in range(amount):
-                grow_texture(&self.ctx)
+            grow_texture_new(&self.ctx, &dst_texture.ctx, &clip)
+
+        return dst_texture
 
     def resample(self, unsigned int width, unsigned int height):
         cdef MeshTexture dst = MeshTexture.__new__(MeshTexture)
@@ -410,11 +433,29 @@ cdef class MeshRenderer(object):
         with nogil:
             under(&self.ctx, &tex.ctx)
 
-    def grow(self, unsigned int amount=16):
+    def grow(self, unsigned int amount=16, rect=None, MeshTexture dst_texture=None):
+
+        if dst_texture is None:
+            dst_texture = MeshTexture(None, self.width, self.height)
+
+        cdef Rect clip
+
+        clip.min.x = 0
+        clip.min.y = 0
+
+        clip.max.x = dst_texture.width - 1
+        clip.max.y = dst_texture.height -1
+
+        if rect:
+            clip.min.x = rect[0][0]
+            clip.min.y = rect[0][1]
+            clip.max.x = rect[1][0]
+            clip.max.y = rect[1][1]
+
         with nogil:
-            # for i in range(amount):
-            #     grow_texture(&self.ctx.img)
-            grow_texture_new(&self.ctx.img)
+            grow_texture_new(&self.ctx.img, &dst_texture.ctx, &clip)
+
+        return dst_texture
 
     def to_texture(self, width=None, height=None):
 

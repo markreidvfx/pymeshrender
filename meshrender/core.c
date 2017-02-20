@@ -711,50 +711,8 @@ static inline int solid_alpha(Texture *tex, int src_x, int src_y, size_t width, 
 }
 
 #define GROW_BOARDER 20
-#define GROW_BOX 128
+#define GROW_BOX 64
 #define GROW_SIZE ((GROW_BOARDER * 2) + GROW_BOX)
-
-static inline vec4 get_3x3_average_pixel(Texture *tex, int pixel_x, int pixel_y)
-{
-    int count = 0;
-    vec4 sum;
-    sum.x = 0;
-    sum.y = 0;
-    sum.z = 0;
-    sum.w = 0;
-
-    for (int y=-1; y <= 1; y++) {
-        for (int x=-1; x <= 1; x++) {
-            vec4 c = get_pixel(tex, x + pixel_x,  y + pixel_y);
-            if (c.w == 0.0f)
-                continue;
-
-            sum = add_vec4(sum, c);
-            count++;
-        }
-    }
-
-    if (count)
-        sum = div_vec4_f(sum, (float)count);
-
-
-    return sum;
-}
-
-static inline void grow_average_nearest(Texture *src, Texture *dst)
-{
-
-    for (int y=0; y < src->height; y++) {
-        for (int x=0; x < src->width; x++) {
-            vec4 c = get_pixel(src, x, y);
-            if (c.w == 0) {
-                c = get_3x3_average_pixel(src, x, y);
-            }
-            set_pixel(dst, x, y, &c);
-        }
-    }
-
-}
 
 static inline void replace_texture(Texture *src, Texture *dst)
 {
@@ -770,71 +728,87 @@ static inline void replace_texture(Texture *src, Texture *dst)
 }
 
 
-void grow_texture_new(Texture *ctx)
+void grow_texture_new(Texture *ctx, Texture *dst, const Rect *clip)
 {
-    Texture tmp1_tex;
-    Texture dst_tex;
-    tmp1_tex.mem = NULL;
-    dst_tex.mem = NULL;
+    Texture tmp_tex;
+    tmp_tex.mem = NULL;
 
 #if 0
-    setup_texture_context(&tmp1_tex, GROW_SIZE, GROW_SIZE);
+    setup_texture_context(&tmp_tex, GROW_SIZE, GROW_SIZE);
 #else
     // use stack memory for temp texture
     float texture_memory[GROW_SIZE * GROW_SIZE * 4] __attribute__((aligned(16)));
 
     size_t channel_size = GROW_SIZE * GROW_SIZE;
 
-    tmp1_tex.width = GROW_SIZE;
-    tmp1_tex.height = GROW_SIZE;
+    tmp_tex.width = GROW_SIZE;
+    tmp_tex.height = GROW_SIZE;
 
-    tmp1_tex.r = &texture_memory[0];
-    tmp1_tex.g = tmp1_tex.r + channel_size;
-    tmp1_tex.b = tmp1_tex.g + channel_size;
-    tmp1_tex.a = tmp1_tex.b + channel_size;
+    tmp_tex.r = &texture_memory[0];
+    tmp_tex.g = tmp_tex.r + channel_size;
+    tmp_tex.b = tmp_tex.g + channel_size;
+    tmp_tex.a = tmp_tex.b + channel_size;
 
 #endif
 
-    copy_texture(ctx, &dst_tex);
+    // printf("%dx%d\n", ctx->width, ctx->height);
+    // printf("%dx%d\n", tmp_tex.width, tmp_tex.height);
+    // printf("%dx%d\n", dst->width, dst->height);
 
-    int x_steps = ctx->width / GROW_BOX;
-    int y_steps = ctx->height / GROW_BOX;
+    int width  =  clip->max.x - clip->min.x + 1;
+    int height =  clip->max.y - clip->min.y + 1;
 
-    int src_y = 0;
+    // copy_texture_rect2(ctx, dst, clip, clip->min.x, clip->min.y);
 
-    for (int y =0; y < y_steps; y++) {
-        int src_x = 0;
-        for (int x=0; x < x_steps; x++) {
+    int has_pixels = copy_texture_rect(ctx, dst,
+                                       clip->min.x, clip->min.y, clip->min.x, clip->min.y,
+                                       width, height);
 
-            Texture *a_tex = &tmp1_tex;
+    if (!has_pixels)
+        return;
 
-            int has_pixels = copy_texture_rect(ctx, a_tex,
+
+    int x_steps = width / GROW_BOX;
+    int y_steps = width / GROW_BOX;
+
+    int src_y = clip->min.y;
+
+    for (int y =0; y <= y_steps; y++) {
+        int src_x = clip->min.x;
+        for (int x=0; x <= x_steps; x++) {
+
+            // Texture *a_tex = &tmp1_tex;
+
+            has_pixels = copy_texture_rect(ctx, &tmp_tex,
                                          src_x - GROW_BOARDER, src_y - GROW_BOARDER,
                                          0, 0, GROW_SIZE, GROW_SIZE);
 
             if (has_pixels) {
-                if(!solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
+                if(!solid_alpha( &tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX)) {
 
                     for (int i = 0; i < GROW_BOARDER-4; i++) {
-                        grow_texture_down_up(a_tex, 0);
-                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
+                        grow_texture_down_up(&tmp_tex, 0);
+                        if (solid_alpha(&tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
                             break;
 
-                        grow_texture_left_right(a_tex, 1);
-                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
+                        grow_texture_left_right(&tmp_tex, 1);
+                        if (solid_alpha(&tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
                             break;
-                        grow_texture_down_up(a_tex, 1);
-                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
+                        grow_texture_down_up(&tmp_tex, 1);
+                        if (solid_alpha(&tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
                             break;
-                        grow_texture_left_right(a_tex, 0);
-                        if (solid_alpha(a_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
+                        grow_texture_left_right(&tmp_tex, 0);
+                        if (solid_alpha( &tmp_tex, GROW_BOARDER, GROW_BOARDER, GROW_BOX, GROW_BOX))
                             break;
 
                     }
 
-                    copy_texture_rect(a_tex, &dst_tex,
+                    int copy_width  = MIN(GROW_BOX, clip->max.x - src_x + 1);
+                    int copy_height = MIN(GROW_BOX, clip->max.y - src_y + 1);
+
+                    copy_texture_rect(&tmp_tex, dst,
                                       GROW_BOARDER, GROW_BOARDER,
-                                      src_x, src_y, GROW_BOX, GROW_BOX);
+                                      src_x, src_y, copy_width, copy_height);
                 }
             }
             src_x += GROW_BOX;
@@ -843,7 +817,7 @@ void grow_texture_new(Texture *ctx)
         src_y += GROW_BOX;
     }
 
-    replace_texture(&dst_tex, ctx);
+    // replace_texture(&dst_tex, ctx);
     // free_texture_context(&tmp1_tex);
 }
 
@@ -947,7 +921,7 @@ void resample_texture_half_sse(Texture *src, Texture *dst)
     int sw = src->width - 1;
     int sh = src->height - 1;
 
-    printf("fast half sse\n");
+    // printf("fast half sse\n");
 
     float *src_channels[4];
     float *dst_channels[4];

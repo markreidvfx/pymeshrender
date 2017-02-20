@@ -861,12 +861,19 @@ static inline vec4 get_tex_color_linear(Texture *tex, vec2 uv)
     w[2] = fx1 * fy;
     w[3] = fx  * fy;
 
-    vec4 color = {0, 0, 0, 0};
+    vec4 color;
 
+#if 1
+    color.sse = _mm_add_ps(_mm_mul_ps(c[0].sse, _mm_set1_ps(w[0])),
+                _mm_add_ps(_mm_mul_ps(c[1].sse, _mm_set1_ps(w[1])),
+                _mm_add_ps(_mm_mul_ps(c[2].sse, _mm_set1_ps(w[2])),
+                           _mm_mul_ps(c[3].sse, _mm_set1_ps(w[3])))));
+#else
     color.x = (c[0].x * w[0]) + (c[1].x * w[1]) + (c[2].x * w[2]) + (c[3].x * w[3]);
     color.y = (c[0].y * w[0]) + (c[1].y * w[1]) + (c[2].y * w[2]) + (c[3].y * w[3]);
     color.z = (c[0].z * w[0]) + (c[1].z * w[1]) + (c[2].z * w[2]) + (c[3].z * w[3]);
     color.w = (c[0].w * w[0]) + (c[1].w * w[1]) + (c[2].w * w[2]) + (c[3].w * w[3]);
+#endif
 
     return color;
 }

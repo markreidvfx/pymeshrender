@@ -325,8 +325,10 @@ if __name__ == "__main__":
     if len(args) < 1:
         parser.error("not enought args")
 
+    start = time.time()
     project3d(options.abc, options.projected_image, args[0],
               frame = options.frame,
               subdiv_level = options.level,
               size = options.size
     )
+    print "projection in %f secs" % (time.time() - start)

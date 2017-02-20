@@ -71,10 +71,10 @@ typedef struct {
 }MeshData;
 
 typedef struct {
-  int width;
-  int height;
+  size_t width;
+  size_t height;
   void *mem;
-  int mem_size;
+  size_t mem_size;
   float *r;
   float *g;
   float *b;
@@ -82,15 +82,15 @@ typedef struct {
 }Texture;
 
 typedef struct {
-    int width;
-    int height;
+    size_t width;
+    size_t height;
     int perspective_correct;
     int uvspace;
     int projection;
     int checker_size;
     int wireframe;
     void *mem;
-    int mem_size;
+    size_t mem_size;
     Texture img;
 	float *z;
 }RenderContext;

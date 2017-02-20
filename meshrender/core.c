@@ -30,9 +30,9 @@ void free_texture_context(Texture *ctx)
 void setup_texture_context(Texture *ctx, size_t width, size_t height)
 {
     int nb_channels = 4;
-    int channel_size = width * height * sizeof(float);
+    size_t channel_size = width * height * sizeof(float);
 
-    int mem_size = (channel_size *nb_channels) + 15;
+    size_t mem_size = (channel_size *nb_channels) + 15;
 
     ctx->width = width;
     ctx->height = height;
@@ -58,9 +58,9 @@ void setup_texture_context(Texture *ctx, size_t width, size_t height)
 
 void setup_render_context(RenderContext *ctx, size_t width, size_t height)
 {
-    int nb_channels = 4+1;
-    int channel_size = width * height * sizeof(float);
-    int mem_size = (channel_size *nb_channels) + 15;
+    size_t nb_channels = 4+1;
+    size_t channel_size = width * height * sizeof(float);
+    size_t mem_size = (channel_size *nb_channels) + 15;
 
     ctx->width = width;
     ctx->height = height;
@@ -92,9 +92,9 @@ void setup_render_context(RenderContext *ctx, size_t width, size_t height)
 
 void copy_texture(Texture *src, Texture *dst)
 {
-    int nb_channels = 4;
-    int channel_size = src->width * src->height * sizeof(float);
-    int mem_size = channel_size * nb_channels;
+    size_t nb_channels = 4;
+    size_t channel_size = src->width * src->height * sizeof(float);
+    size_t mem_size = channel_size * nb_channels;
     setup_texture_context(dst, src->width, src->height);
     memcpy(dst->r, src->r, mem_size);
 }
@@ -102,11 +102,11 @@ void copy_texture(Texture *src, Texture *dst)
 void load_packed_texture(Texture *ctx,
                          uint8_t *src, size_t width, size_t height, int depth)
 {
-    int x = 0;
-    int y = 0;
+    size_t x;
+    size_t y;
 
-    int y_max = MIN(height, ctx->height);
-    int x_max = MIN(width,  ctx->width);
+    size_t y_max = MIN(height, ctx->height);
+    size_t x_max = MIN(width,  ctx->width);
 
     float max_pixel = 1.0f / ((1 << depth) - 1);
     int bytes_size = depth/8;
@@ -114,14 +114,14 @@ void load_packed_texture(Texture *ctx,
 
     for (y = 0; y < y_max; y++) {
 
-        int offset = y * (ctx->width);
+        size_t offset = y * (ctx->width);
         float *r = ctx->r + offset;
         float *g = ctx->g + offset;
         float *b = ctx->b + offset;
         float *a = ctx->a + offset;
 
 
-        int src_offset = (y * (width)) * bytes_size * channels;
+        size_t src_offset = (y * (width)) * bytes_size * channels;
         uint8_t *pixel = src + src_offset;
         uint16_t *pix16 = (uint16_t*)pixel;
 
@@ -164,21 +164,21 @@ void load_texure(Texture *ctx,
                  size_t width, size_t height)
 {
 
-    int x = 0;
-    int y = 0;
+    size_t x;
+    size_t y;
 
-    int y_max = MIN(height, ctx->height);
-    int x_max = MIN(width,  ctx->width);
+    size_t y_max = MIN(height, ctx->height);
+    size_t x_max = MIN(width,  ctx->width);
     for (y = 0; y < y_max; y++) {
 
-        int offset = y * (ctx->width);
+        size_t offset = y * (ctx->width);
         float *r = ctx->r + offset;
         float *g = ctx->g + offset;
         float *b = ctx->b + offset;
         float *a = ctx->a + offset;
 
-        int bytes_size = 1;
-        int src_offset = (y * (width)) * bytes_size;
+        size_t bytes_size = 1;
+        size_t src_offset = (y * (width)) * bytes_size;
 
         uint8_t *s_r = src_r + src_offset;
         uint8_t *s_g = src_g + src_offset;
@@ -204,61 +204,23 @@ void load_texure(Texture *ctx,
     }
 }
 
-static inline vec4 make_vec4(float x, float y, float z, float w)
-{
-    vec4 r;
-    r.x = x;
-    r.y = y;
-    r.z = z;
-    r.w = w;
-    return r;
-}
-
-static inline vec4 add_vec4(vec4 a, vec4 b)
-{
-
-    vec4 r;
-    r.x = a.x + b.x;
-    r.y = a.y + b.y;
-    r.z = a.z + b.z;
-    r.w = a.w + b.w;
-    return r;
-}
-
-static inline vec4 div_vec4(vec4 a, vec4 b)
-{
-    vec4 r;
-    r.x = a.x / b.x;
-    r.y = a.y / b.y;
-    r.z = a.z / b.z;
-    r.w = a.w / b.w;
-    return r;
-}
-
-static inline vec4 div_vec4_f(vec4 a, float b)
-{
-    return div_vec4(a, make_vec4(b,b,b,b));
-}
-
-
-
 void under(RenderContext *rctx, Texture *tex)
 {
     Texture *ctx  = &rctx->img;
-    int x = 0;
-    int y = 0;
-    int y_max = MIN(tex->height, ctx->height);
-    int x_max = MIN(ctx->width, tex->width);
+    size_t x = 0;
+    size_t y = 0;
+    size_t y_max = MIN(tex->height, ctx->height);
+    size_t x_max = MIN(ctx->width, tex->width);
 
     for (y = 0; y < y_max; y++) {
 
-        int offset = y * (ctx->width);
+        size_t offset = y * (ctx->width);
         float *r = ctx->r + offset;
         float *g = ctx->g + offset;
         float *b = ctx->b + offset;
         float *a = ctx->a + offset;
 
-        int tex_offset = y * (tex->width);
+        size_t tex_offset = y * (tex->width);
 
         float *s_r = tex->r + tex_offset;
         float *s_g = tex->g + tex_offset;
@@ -291,17 +253,43 @@ void under(RenderContext *rctx, Texture *tex)
 
 }
 
-static inline vec4 get_pixel(Texture *tex, int x, int y)
+static inline vec4 v4(float x, float y, float z, float w)
 {
-    vec4 color = {0, 0, 0, 0};
+    vec4 r;
+    r.x = x;
+    r.y = y;
+    r.z = z;
+    r.w = w;
+    return r;
+}
 
-    int w = tex->width - 1;
-    int h = tex->height - 1;
+static inline vec3 v3(float x, float y, float z)
+{
+    vec3 r;
+    r.x = x;
+    r.y = y;
+    r.z = z;
+    return r;
+}
+
+static inline vec2 v2(float x, float y)
+{
+    vec2 r;
+    r.x = x;
+    r.y = y;
+    return r;
+}
+static inline vec4 get_pixel(const Texture *tex, size_t x, size_t y)
+{
+    vec4 color = v4(0, 0, 0, 0);
+
+    size_t w = tex->width - 1;
+    size_t h = tex->height - 1;
 
     x = MIN(MAX(x, 0), w);
     y = MIN(MAX(y, 0), h);
 
-    int index = x + (y * tex->width);
+    size_t index = x + (y * tex->width);
 
     color.x = tex->r[index];
     color.y = tex->g[index];
@@ -311,28 +299,14 @@ static inline vec4 get_pixel(Texture *tex, int x, int y)
     return color;
 }
 
-static inline float get_alpha_pixel(Texture *tex, int x, int y)
-{
-    vec4 color = {0, 0, 0, 0};
-
-    int w = tex->width - 1;
-    int h = tex->height - 1;
-
-    x = MIN(MAX(x, 0), w);
-    y = MIN(MAX(y, 0), h);
-
-    int index = x + (y * tex->width);
-    return  tex->a[index];
-}
-
-static inline void set_pixel(Texture *ctx, int x, int y, vec4 *color)
+static inline void set_pixel(Texture *ctx, size_t x, size_t y, vec4 *color)
 {
     if (x > ctx->width  - 1 ||
         y > ctx->height - 1 ) {
         // printf("%d %d out of bounds \n", x,y);
         return;
     }
-    int index = x + (y * ctx->width);
+    size_t index = x + (y * ctx->width);
 
     ctx->r[index] = color->x;
     ctx->g[index] = color->y;
@@ -347,8 +321,8 @@ void grow_texture_slow(Texture *ctx)
     //int dir[4][2] = {{1,0}, {-1, 0}};
     vec4 test_pixel;
 
-    int x_p;
-    int y_p;
+    size_t x_p;
+    size_t y_p;
     int step;
     int dir_index, x, y;
 
@@ -370,7 +344,7 @@ void grow_texture_slow(Texture *ctx)
             if (y_d < 0)
                 y_p = (ctx->height-1) - y;
 
-            int pix_index = x_p + (y_p * ctx->width);
+            size_t pix_index = x_p + (y_p * ctx->width);
 
             float *r = ctx->r + pix_index;
             float *g = ctx->g + pix_index;
@@ -423,15 +397,15 @@ static inline void grow_texture_left_right(Texture *ctx, int right)
     int offset = 4;
     if (right)
         offset = -4;
-    int x, y;
+    size_t x, y;
     for (y = 0; y < ctx->height; y++) {
 
-        int x_p = 0;
+        size_t x_p = 0;
         if (right) {
             x_p = ctx->width - 4;
         }
 
-        int pix_index = x_p + (y * ctx->width);
+        size_t pix_index = x_p + (y * ctx->width);
         //printf("%d %d\n", x_p, pix_index);
 
         float *r = ctx->r + pix_index;
@@ -519,14 +493,14 @@ static inline void grow_texture_down_up(Texture *ctx, int up)
     int offset = 1;
     if (up)
         offset = -1;
-    int x, y;
+    size_t x, y;
     for (y = 0; y < ctx->height-1; y++) {
 
-        int px_y = y;
+        size_t px_y = y;
         if (up)
             px_y =  (ctx->height-1) - y;
 
-        int pix_index = (px_y * ctx->width);
+        size_t pix_index = (px_y * ctx->width);
 
         float *r = ctx->r + pix_index;
         float *g = ctx->g + pix_index;
@@ -576,78 +550,6 @@ static inline void grow_texture_down_up(Texture *ctx, int up)
         }
     }
 
-
-}
-static const float gauss3x3table[] = {
-  1.0f/16.0f, 1.0f/8.0f, 1.0f/16.0f,
-   1.0f/8.0f, 1.0f/4.0f,  1.0f/8.0f,
-  1.0f/16.0f, 1.0f/8.0f, 1.0f/16.0f };
-
-static inline vec4 gausse3x3(Texture *ctx, int px, int py)
-{
-    vec4 average = {};
-    int g_index = 0;
-    int x,y;
-    for (y = py - 1; y <= py + 1; y++) {
-        for (x = px - 1; x <= px + 1; x++ ) {
-            vec4 pix = get_pixel(ctx, x, y);
-
-            // if (pix.w > 0) {
-            //     float inv = 1.0/pix.w;
-            //     pix.x*=inv;
-            //     pix.y*=inv;
-            //     pix.z*-inv;
-            // }
-
-            // average.x += pix.x;
-            // average.y += pix.y;
-            // average.z += pix.z;
-            // average.w += pix.w;
-
-            average.x += pix.x * gauss3x3table[g_index];
-            average.y += pix.y * gauss3x3table[g_index];
-            average.z += pix.z * gauss3x3table[g_index];
-            average.w += pix.w * gauss3x3table[g_index];
-            g_index++;
-            //average.x =1;
-        }
-    }
-    // average.x *= average.w;
-    // average.y *= average.w;
-    // average.z *= average.w;
-
-    return average;
-}
-
-void blur_pixels(Texture *ctx, float *orig_a)
-{
-    Texture src = {};
-    src.width = ctx->width;
-    src.height = ctx->width;
-    copy_texture(ctx, &src);
-    int x,y;
-    for (y = 0; y < ctx->height; y++) {
-
-        int pix_index = y * ctx->width;
-        float *a  = src.a + pix_index;
-        float *oa = orig_a + pix_index;
-
-        for (x = 0; x < ctx->width; x++) {
-            if (*oa != *a) {
-
-                //printf("here %d %d\n", x,y);
-                vec4 blur = gausse3x3(&src, x, y);
-
-                //vec4 average = {0,0,1,1};
-                set_pixel(ctx, x, y, &blur);
-            }
-
-            a++;
-            oa++;
-        }
-    }
-
-    free_texture_context(&src);
 
 }
 
@@ -713,20 +615,6 @@ static inline int solid_alpha(Texture *tex, int src_x, int src_y, size_t width, 
 #define GROW_BOARDER 20
 #define GROW_BOX 64
 #define GROW_SIZE ((GROW_BOARDER * 2) + GROW_BOX)
-
-static inline void replace_texture(Texture *src, Texture *dst)
-{
-    free_texture_context(dst);
-    dst->mem = src->mem;
-    dst->mem_size = src->mem_size;
-    dst->width = src->width;
-    dst->height = src->height;
-    dst->r = src->r;
-    dst->g = src->g;
-    dst->b = src->b;
-    dst->a = src->a;
-}
-
 
 void grow_texture_new(Texture *ctx, Texture *dst, const Rect *clip)
 {
@@ -821,21 +709,10 @@ void grow_texture_new(Texture *ctx, Texture *dst, const Rect *clip)
     // free_texture_context(&tmp1_tex);
 }
 
-static inline vec4 get_tex_color(Texture *tex, vec2 uv)
+static inline vec4 get_tex_color_linear(const Texture *tex, vec2 uv)
 {
-    int w = tex->width - 1;
-    int h = tex->height - 1;
-
-    int x = (uv.x) * w;
-    int y = (1 - uv.y) * h;
-
-    return get_pixel(tex, x, y);
-}
-
-static inline vec4 get_tex_color_linear(Texture *tex, vec2 uv)
-{
-    int width = tex->width - 1;
-    int height = tex->height - 1;
+    size_t width = tex->width - 1;
+    size_t height = tex->height - 1;
 
     float x = (uv.x) * (float)width;
     float y = (1.0f - uv.y) * (float)height;
@@ -892,7 +769,6 @@ void resample_texture_half(Texture *src, Texture *dst)
             vec4 c4 = get_pixel(src, x+1, y+1);
 
             vec4 c;
-            // c = div_vec4_f(add_vec4(c1, add_vec4(c2, add_vec4(c3, c4))), 4.0f);
 
             c.sse = _mm_mul_ps(_mm_add_ps(c1.sse, _mm_add_ps(c2.sse, _mm_add_ps(c3.sse, c4.sse))), _mm_set1_ps(0.25f));
 
@@ -925,9 +801,6 @@ static inline __m128 get_4x8_half(float *p)
 
 void resample_texture_half_sse(Texture *src, Texture *dst)
 {
-    int sw = src->width - 1;
-    int sh = src->height - 1;
-
     // printf("fast half sse\n");
 
     float *src_channels[4];
@@ -984,7 +857,6 @@ void resample_texture(Texture *src, Texture *dst)
     for (int y_pixel = 0; y_pixel < dst->height; y_pixel++) {
 
         for (int x_pixel = 0; x_pixel < dst->width; x_pixel++) {
-            vec4 r;
             uv.y = (y_pixel + 0.5f) / (float)dst->height;
             uv.x = (x_pixel + 0.5f) / (float)dst->width;
             vec4 c  =  get_tex_color_linear(src, uv);
@@ -1017,13 +889,6 @@ static inline __m128 halfedge_x4(const m128vec4 *a, const m128vec4 *b, const m12
                         _mm_mul_ps(_mm_sub_ps(b->y, a->y), _mm_sub_ps(c->x, a->x)));
     return result;
 }
-
-static inline int halfedgei(const vec2i *a, const vec2i *b, const vec2i *c)
-{
-    int result = ((b->x - a->x) * (c->y - a->y)) - ((b->y - a->y) * (c->x - a->x));
-    return result;
-}
-
 
 static inline float bary_blend(float v0, float v1, float v2, float w0, float w1, float w2)
 {
@@ -1074,7 +939,7 @@ static inline __m128 bary_blend_m128(__m128 v0, __m128 v1, __m128 v2,
     return _mm_add_ps(_mm_add_ps(_mm_mul_ps(v0, w0), _mm_mul_ps(v1, w1)), _mm_mul_ps(v2, w2));
 }
 
-static inline int rect_intersects(Rect *a, Rect *b)
+static inline int rect_intersects(const Rect *a, const Rect *b)
 {
     if (a->min.x <= b->max.x && a->max.x >= b->min.x &&
         a->min.y <= b->max.y && a->max.y >= b->min.y)
@@ -1103,17 +968,6 @@ static inline void load_mesh_data(Triangle* p, const MeshIndex indices[3], const
         }
     }
 
-}
-
-static inline void perspective_divide(Triangle* p)
-{
-    float w[3] = {p->verts[0].w, p->verts[1].w, p->verts[2].w};
-    int i;
-    for (i =0; i < 3; i++) {
-        p->verts[i].x /= w[i];
-        p->verts[i].y /= w[i];
-        p->verts[i].z /= w[i];
-    }
 }
 
 static inline void perspective_correction(Triangle* p)
@@ -1146,30 +1000,29 @@ static inline void perspective_correction(Triangle* p)
 }
 
 void render_pixel(RenderContext *ctx, const vec4 *point,
-                  float w0, float w1, float w2, const Triangle* poly, Texture *tex)
+                  float w0, float w1, float w2, const Triangle* poly, const Texture *tex)
 {
 
     int x = point->x;
     int y = point->y;
 
-    int width = ctx->width;
-
-    int offset = x + (y * (width));
+    size_t width = ctx->width;
+    size_t offset = x + (y * (width));
 
 
     float *r  = ctx->img.r  + offset;
     float *g  = ctx->img.g  + offset;
     float *b  = ctx->img.b  + offset;
     float *a  = ctx->img.a  + offset;
-    float *z  = ctx->z  + offset;
+    // float *z  = ctx->z  + offset;
 
-    vec4 c1 = {0.0f, 0.0f, 0.0f};
-    vec4 c2 = {0.0f, 0.0f, 0.0f};
+    vec4 c1 = v4(0.0f, 0.0f, 0.0f, 1.0f);
+    vec4 c2 = v4(0.0f, 0.0f, 0.0f, 1.0f);
 
-    vec3 normal = {1.0f, 1.0f, 1.0f};
-    vec2 uv = {0.0f, 0.0f};
+    vec3 normal = v3(1.0f, 1.0f, 1.0f);
+    vec2 uv = v2(0.0f, 0.0f);
 
-    vec4 tc = {0, 0, 0, 0};
+    vec4 tc = v4(0.0f, 0.0f, 0.0f, 0.0f);
 
     float one_over_z = 1.0;
     float correct_z = 1.0;
@@ -1272,7 +1125,7 @@ void render_pixel(RenderContext *ctx, const vec4 *point,
     *a = 1.0f;
 }
 
-static inline void uv_to_screen_space(const RenderContext *ctx, Triangle *p, Texture *tex)
+static inline void uv_to_screen_space(const RenderContext *ctx, Triangle *p, const Texture *tex)
 {    if (p->has_uvs) {
 
 
@@ -1280,8 +1133,8 @@ static inline void uv_to_screen_space(const RenderContext *ctx, Triangle *p, Tex
       p->c2[1] = p->verts[1];
       p->c2[2] = p->verts[2];
 
-      int w = ctx->width - 1;
-      int h = ctx->height - 1;
+      size_t w = ctx->width - 1;
+      size_t h = ctx->height - 1;
 
       p->verts[0].x =  p->uvs[0].x * w;
       p->verts[0].y =  (1 -p->uvs[0].y) * h;
@@ -1342,10 +1195,10 @@ static inline vec4 m128vec4_get_vec4(m128vec4 *a, int i) {
     return v;
 }
 
-void draw_triangle(RenderContext *ctx, const Triangle *tri, const Rect *clip, const Texture *tex)
+void draw_triangle(RenderContext *ctx, Triangle *tri, const Rect *clip, const Texture *tex)
 {
-    int width = ctx->width;
-    int height = ctx->height;
+    size_t width = ctx->width;
+    size_t height = ctx->height;
 
     vec4 *v0 = &tri->verts[0];
     vec4 *v1 = &tri->verts[1];
@@ -1382,9 +1235,7 @@ void draw_triangle(RenderContext *ctx, const Triangle *tri, const Rect *clip, co
     // float w1_bias = top_or_left_edge(v2, v0) ? 0 : -1;
     // float w2_bias = top_or_left_edge(v0, v1) ? 0 : -1;
 
-    __m128 one = _mm_set1_ps(1);
     __m128 zero = _mm_set1_ps(0);
-    __m128 four = _mm_set1_ps(4);
     __m128 area4x_inv = _mm_set1_ps(1.0f / area);
 
     m128vec4 v0x4 = set1_m128vec4(v0);
@@ -1430,7 +1281,7 @@ void draw_triangle(RenderContext *ctx, const Triangle *tri, const Rect *clip, co
                         float w1 = w1x4[i];
                         float w2 = w2x4[i];
 
-                        int pixel_offset = (int)p.x + ((int)p.y * width);
+                        size_t pixel_offset = (int)p.x + ((int)p.y * width);
 
                         // if passes depth test render pixel
                         if (p.z < ctx->z[pixel_offset]) {
@@ -1565,15 +1416,10 @@ void set_edge_color(Edge *edge, vec4* color)
 
 void draw_tri_edges(RenderContext *ctx, const MeshIndex *indices, const Triangle *tri, const Rect *clip, const Texture *tex)
 {
-    vec4 *v0 = &tri->verts[0];
-    vec4 *v1 = &tri->verts[1];
-    vec4 *v2 = &tri->verts[2];
-
     float line_width = 1;
 
-    vec4 diagonal_c = {0,0,1,1};
-    vec4 coarse_edge_c = {1,1,1,1};
-    vec4 edge_c = {0.25, 0.25, 0.25, 0.25};
+    vec4 coarse_edge_c = v4(1.0f,1.0f,1.0f,1.0f);
+    vec4 edge_c = v4(0.25f, 0.25f, 0.25f, 0.25f);
 
     Edge edge;
 
@@ -1700,7 +1546,7 @@ void simple_line_draw(RenderContext *ctx, vec4 *a, vec4 *b, vec4 *c, const Rect 
 void draw_bbox(RenderContext *ctx, vec4 *bbox, const Rect *clip)
 {
 
-    vec4 c = {1.0, 1.0, 1.0, 1.0};
+    vec4 c = v4(1.0, 1.0, 1.0, 1.0);
     simple_line_draw(ctx, &bbox[0], &bbox[1], &c, clip);
     simple_line_draw(ctx, &bbox[0], &bbox[2], &c, clip);
     simple_line_draw(ctx, &bbox[0], &bbox[4], &c, clip);
@@ -1793,28 +1639,6 @@ void draw_quad(RenderContext *ctx, const MeshIndex indices[4], const MeshData *m
     }
 }
 
-static inline __m128i mull_epi32(__m128i a, __m128i b)
-{
-    __m128i tmp1 = _mm_mul_epu32(a,b); /* mul 2,0*/
-    __m128i tmp2 = _mm_mul_epu32( _mm_srli_si128(a,4), _mm_srli_si128(b,4)); /* mul 3,1 */
-    return _mm_unpacklo_epi32(_mm_shuffle_epi32(tmp1, _MM_SHUFFLE (0,0,2,0)), _mm_shuffle_epi32(tmp2, _MM_SHUFFLE (0,0,2,0))); /* shuffle results to [63..0] and pack */
-}
-
-static int stepXSize = 4;
-static int stepYSize = 1;
-
-static int prec = 4;
-
-
-static inline __m128 blend_ps(__m128 a, __m128 b, __m128 mask)
-{
-    __m128 b_masked = _mm_and_ps(mask, b); // Where mask is 1, output b.
-    __m128 a_masked= _mm_andnot_ps(mask, a); // Where mask is 0, output a.
-    return _mm_or_ps(a_masked, b_masked);
-
-}
-
-
 inline __m128 modf_ps(__m128 x, __m128 mod)
 {
     __m128 ints = _mm_div_ps(x, mod);
@@ -1826,7 +1650,7 @@ inline __m128 modf_ps(__m128 x, __m128 mod)
 void texture_context_to_rgba(const Texture *ctx, uint8_t *dst)
 {
     int i;
-    int size = ctx->width * ctx->height;
+    size_t size = ctx->width * ctx->height;
 
     __m128 t255 = _mm_set1_ps(255.0f);
     __m128 one = _mm_set1_ps(1);
@@ -1870,7 +1694,7 @@ static inline __m128i channel_tail(__m128i v)
 
 void texture_context_to_rgba16(const Texture *ctx, uint8_t *dst)
 {
-    int size = ctx->width * ctx->height;
+    size_t size = ctx->width * ctx->height;
     __m128 t65535 = _mm_set1_ps(65535.0f);
     __m128 one = _mm_set1_ps(1);
     __m128 zero = _mm_set1_ps(0);

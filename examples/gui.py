@@ -45,7 +45,7 @@ def save_image(texture, path):
     i = cythonmagick.Image()
     #print texture.width, texture.height
     #print texture.rgba
-    i.from_rawbuffer(bytearray(texture.rgba), texture.width, texture.height, 'BGRA', 'char')
+    i.from_rawbuffer(bytearray(texture.rgba), texture.width, texture.height, 'RGBA', 'char')
     i.write(path)
 
 def save_image16(texture, path, resize=None):
@@ -53,7 +53,7 @@ def save_image16(texture, path, resize=None):
     #print texture.width, texture.height
     #print texture.rgba
     start = time.time()
-    i.from_rawbuffer(bytearray(texture.rgba16), texture.width, texture.height, 'BGRA', 'short')
+    i.from_rawbuffer(bytearray(texture.rgba16), texture.width, texture.height, 'RGBA', 'short')
     print "imagemagick read data in %f secs" % (time.time()- start)
     start = time.time()
     print "imagemagick saving..."
@@ -466,7 +466,7 @@ class Renderer(QtCore.QObject):
             bg_image = read_image_data( self.imageplane % frame, width, height)
             self.renderer.under(bg_image)
 
-        image_data = self.renderer.rgba
+        image_data = self.renderer.bgra
         #print "image converted in %.04f secs" % ( time.time() - start)
 
         bytesPerPixel = 4

@@ -128,20 +128,20 @@ void load_packed_texture(Texture *ctx,
         for (x =0; x < x_max; x++) {
 
             if (depth == 8) {
-                *b = *pixel * max_pixel;
+                *r = *pixel * max_pixel;
                 pixel++;
                 *g = *pixel * max_pixel;
                 pixel++;
-                *r = *pixel * max_pixel;
+                *b = *pixel * max_pixel;
                 pixel++;
                 *a = *pixel * max_pixel;
                 pixel++;
             } else if (depth == 16) {
-                *b = *pix16 * max_pixel;
+                *r = *pix16 * max_pixel;
                 pix16++;
                 *g = *pix16 * max_pixel;
                 pix16++;
-                *r = *pix16 * max_pixel;
+                *b = *pix16 * max_pixel;
                 pix16++;
                 *a = *pix16 * max_pixel;
                 pix16++;

@@ -502,6 +502,25 @@ cdef class MeshRenderer(object):
 
             return bytearray(data)
 
+    property bgra:
+        @cython.boundscheck(False)
+        def __get__(self):
+            cdef unsigned char[:,:,:] data = view.array(shape=(self.height,self.width, 4), itemsize=sizeof(unsigned char), format="B")
+            cdef int size = self.width * self.height
+            cdef int i
+
+            cdef unsigned char *d = <unsigned char *>&data[0][0][0]
+
+            cdef Texture tex;
+            tex = self.ctx.img;
+            tex.r = self.ctx.img.b;
+            tex.b = self.ctx.img.r;
+
+            with nogil:
+                texture_context_to_rgba(&tex, d)
+
+            return bytearray(data)
+
     property rgb:
         @cython.boundscheck(False)
         def __get__(self):
@@ -561,3 +580,31 @@ cdef class MeshRenderer(object):
             self.ctx.perspective_correct = value
         def __get__(self):
             return self.ctx.perspective_correct == 1
+
+    property r:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.img.r
+            return data
+
+    property g:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.img.g
+            return data
+
+    property b:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.img.b
+            return data
+
+    property a:
+        @cython.boundscheck(False)
+        def __get__(self):
+            size = self.ctx.width * self.ctx.height
+            cdef view.array data  = <float [:size]>self.ctx.img.a
+            return data

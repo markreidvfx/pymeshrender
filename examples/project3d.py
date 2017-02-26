@@ -47,7 +47,7 @@ def save_image16(texture, path, resize=None):
     start = time.time()
     i = cythonmagick.Image()
     i.verbose=True
-    i.from_rawbuffer(bytearray(texture.rgba16), texture.width, texture.height, 'BGRA', 'short')
+    i.from_rawbuffer(bytearray(texture.rgba16), texture.width, texture.height, 'RGBA', 'short')
     print "imagemagick read data in %f secs" % (time.time()- start)
     start = time.time()
 

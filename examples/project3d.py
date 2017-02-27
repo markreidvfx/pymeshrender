@@ -26,6 +26,31 @@ def read_image_data16(path, width=None, height=None):
         rgba = frame.reformat(width, height, format="rgba64le")
         return meshrender.MeshTexture(rgba.planes[0], width, height, depth=16)
 
+def save_exr(texture, path):
+    import OpenEXR
+    import Imath
+    start = time.time()
+    hdr = OpenEXR.Header(texture.width, texture.height)
+
+    pixels = {}
+    channels = {}
+    chan_format = Imath.Channel(Imath.PixelType(Imath.PixelType.HALF))
+    # chan_format = Imath.Channel(Imath.PixelType(Imath.PixelType.FLOAT))
+    c_start = time.time()
+    for c, data in [("R", texture.r_f16), ("G",texture.g_f16), ("B", texture.b_f16), ("A", texture.a_f16)]:
+        # pixels[c] = np.array(data).astype(np.float16)
+        pixels[c] = data
+        channels[c]= chan_format
+    print "channel convert in %f secs" % (time.time() - c_start)
+
+    hdr['channels'] = channels
+    hdr['compression'] = Imath.Compression(Imath.Compression.ZIPS_COMPRESSION)
+    exr = OpenEXR.OutputFile(path, hdr)
+    exr.writePixels(pixels)
+    exr.close()
+
+    print "wrote exr in %f secs" % ( time.time() - start)
+
 def save_image16(texture, path, resize=None):
 
 
@@ -43,13 +68,16 @@ def save_image16(texture, path, resize=None):
     print "resize in %f secs" % (time.time() - start)
 
     print texture.width, texture.height
+
+    save_exr(texture, path)
+    return
     #print texture.rgba
     start = time.time()
     i = cythonmagick.Image()
     i.verbose=True
     i.from_rawbuffer(bytearray(texture.rgba16), texture.width, texture.height, 'RGBA', 'short')
     print "imagemagick read data in %f secs" % (time.time()- start)
-    start = time.time()
+    # start = time.time()
 
     i.attributes['colorspace'] = "RGB"
 
@@ -129,21 +157,24 @@ def process_mesh(mesh, persp_matrix, camera_transform, viewport_matrix, seconds,
         vert_channel = meshsmooth.FVarChannel("verts", mesh.face_indices, mesh.vertices_vec4)
         src_mesh =  meshsmooth.Mesh(mesh.face_counts, vert_channel, channels)
 
-        # "NONE"
-        # "EDGE_ONLY"
-        # "EDGE_AND_CORNER"
-
         # "LINEAR_NONE"
         # "LINEAR_CORNERS_ONLY"
         # "LINEAR_CORNERS_PLUS1"
         # "LINEAR_CORNERS_PLUS2"
         # "LINEAR_BOUNDARIES"
         # "LINEAR_ALL"
-        boundry = "EDGE_ONLY"
+
+        boundry = "NONE"
+        # boundry = "EDGE_ONLY"
         boundry = "EDGE_AND_CORNER"
-        # boundry = "NONE"
+
+
+        fvar_interp = "LINEAR_NONE"
+        fvar_interp = "LINEAR_CORNERS_ONLY"
+        # fvar_interp = "LINEAR_CORNERS_PLUS2"
         fvar_interp = "LINEAR_BOUNDARIES"
-        #fvar_interp = "LINEAR_CORNERS_ONLY"
+        # fvar_interp = "LINEAR_ALL"
+
         refiner = meshsmooth.TopologyRefiner(src_mesh, BoundaryInterpolation = boundry,
                                                        FVarInterpolation = fvar_interp)
         smooth_mesh = refiner.refine_uniform(level)
@@ -262,7 +293,7 @@ def project3d(abc_path, image_path, dest_path, frame=None, subdiv_level=0, size=
     renderer = meshrender.MeshRenderer(1024 * scale, 1024 * scale)
     renderer.bake_projection = True
     renderer.uvspace = True
-
+    renderer.wireframe = True
     scene_bounds = np.array(((F_MAX,F_MAX,F_MAX),
                              (F_MIN,F_MIN,F_MIN)), dtype=np.float32)
     for mesh in abc.mesh_list:

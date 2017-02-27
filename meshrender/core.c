@@ -1740,6 +1740,73 @@ void texture_context_to_rgba16(const Texture *ctx, uint8_t *dst)
     }
 }
 
+static int basetable[512];
+static int shifttable[512];
+static int half_float_table = 0;
+
+static inline uint16_t to_half(float f)
+{
+    uint32_t x = *((uint32_t*)&f);
+    //uint16_t h = ((x>>16)&0x8000)|((((x&0x7f800000)-0x38000000)>>13)&0x7c00)|((x>>13)&0x03ff);
+    uint16_t h = basetable[(x>>23)&0x1ff]+((x&0x007fffff)>>shifttable[(x>>23)&0x1ff]);
+    return h;
+}
+
+static inline void generate_half_float_tables()
+{
+    if (half_float_table)
+        return;
+
+    unsigned int i;
+    int e;
+    for(i=0; i<256; ++i) {
+        e=i-127;
+        if(e<-24) { // Very small numbers map to zero
+            basetable[i|0x000]=0x0000;
+            basetable[i|0x100]=0x8000;
+            shifttable[i|0x000]=24;
+            shifttable[i|0x100]=24;
+        }
+        else if(e<-14) { // Small numbers map to denorms
+            basetable[i|0x000]=(0x0400>>(-e-14));
+            basetable[i|0x100]=(0x0400>>(-e-14)) | 0x8000;
+            shifttable[i|0x000]=-e-1;
+            shifttable[i|0x100]=-e-1;
+        }
+        else if(e<=15){ // Normal numbers just lose precision
+            basetable[i|0x000]=((e+15)<<10);
+            basetable[i|0x100]=((e+15)<<10) | 0x8000;
+            shifttable[i|0x000]=13;
+            shifttable[i|0x100]=13;
+        }
+        else if(e<128) { // Large numbers map to Infinity
+            basetable[i|0x000]=0x7C00;
+            basetable[i|0x100]=0xFC00;
+            shifttable[i|0x000]=24;
+            shifttable[i|0x100]=24;
+        }
+        else { // Infinity and NaN's stay Infinity and NaN's
+            basetable[i|0x000]=0x7C00;
+            basetable[i|0x100]=0xFC00;
+            shifttable[i|0x000]=13;
+            shifttable[i|0x100]=13;
+        }
+    }
+
+    half_float_table = 1;
+}
+
+void convert_to_half_float(float *src, unsigned short *dst, size_t size)
+{
+
+    int i;
+    generate_half_float_tables();
+    for (i = 0; i < size; i++) {
+        dst[i] = to_half(src[i]);
+    }
+
+}
+
 void shuffle_test()
 {
 	__m128i v1 = _mm_set_epi32(3,2,1,0);

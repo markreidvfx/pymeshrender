@@ -102,6 +102,7 @@ cdef extern from "core.h" nogil:
 
     cdef void texture_context_to_rgba(Texture *ctx, unsigned char *dst)
     cdef void texture_context_to_rgba16(Texture *ctx, unsigned char *dst)
+    cdef void convert_to_half_float(float *src, unsigned short *dst, size_t size);
 
 @cython.boundscheck(False)
 def perpsective_divide(float [:,:] values):
@@ -310,6 +311,42 @@ cdef class MeshTexture(object):
         def __get__(self):
             size = self.ctx.width * self.ctx.height
             cdef view.array data  = <float [:size]>self.ctx.a
+            return data
+
+
+    property r_f16:
+        @cython.boundscheck(False)
+        def __get__(self):
+            cdef unsigned short[:,:] data = view.array(shape=(self.height, self.width),
+                                                      itemsize=sizeof(unsigned short), format="H")
+            with nogil:
+                convert_to_half_float(self.ctx.r, &data[0][0], self.ctx.width * self.ctx.height)
+            return data
+
+    property g_f16:
+        @cython.boundscheck(False)
+        def __get__(self):
+            cdef unsigned short[:,:] data = view.array(shape=(self.height, self.width),
+                                                      itemsize=sizeof(unsigned short), format="H")
+            with nogil:
+                convert_to_half_float(self.ctx.g, &data[0][0], self.ctx.width * self.ctx.height)
+            return data
+
+    property b_f16:
+        @cython.boundscheck(False)
+        def __get__(self):
+            cdef unsigned short[:,:] data = view.array(shape=(self.height, self.width),
+                                                      itemsize=sizeof(unsigned short), format="H")
+            convert_to_half_float(self.ctx.b, &data[0][0], self.ctx.width * self.ctx.height)
+            return data
+
+    property a_f16:
+        @cython.boundscheck(False)
+        def __get__(self):
+            cdef unsigned short[:,:] data = view.array(shape=(self.height, self.width),
+                                                      itemsize=sizeof(unsigned short), format="H")
+            with nogil:
+                convert_to_half_float(self.ctx.a, &data[0][0], self.ctx.width * self.ctx.height)
             return data
 
     property rgba16:

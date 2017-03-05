@@ -1740,14 +1740,67 @@ void texture_context_to_rgba16(const Texture *ctx, uint8_t *dst)
     }
 }
 
-static int basetable[512];
-static int shifttable[512];
+static unsigned int basetable[512];
+static unsigned char shifttable[512];
 static int half_float_table = 0;
+
+static inline __m128i float_to_half_SSE2(__m128 f)
+{
+#define CONSTF(name) _mm_castsi128_ps(name)
+
+    __m128i mask_sign       = _mm_set1_epi32(0x80000000u);
+    __m128i mask_round      = _mm_set1_epi32(~0xfffu);
+    __m128i c_f32infty      = _mm_set1_epi32(255 << 23);
+    __m128i c_magic         = _mm_set1_epi32(15 << 23);
+    __m128i c_nanbit        = _mm_set1_epi32(0x200);
+    __m128i c_infty_as_fp16 = _mm_set1_epi32(0x7c00);
+    __m128i c_clamp         = _mm_set1_epi32((31 << 23) - 0x1000);
+
+    __m128  msign       = CONSTF(mask_sign);
+    __m128  justsign    = _mm_and_ps(msign, f);
+    __m128i f32infty    = c_f32infty;
+    __m128  absf        = _mm_xor_ps(f, justsign);
+    __m128  mround      = CONSTF(mask_round);
+    __m128i absf_int    = _mm_castps_si128(absf); // pseudo-op, but val needs to be copied once so count as mov
+    __m128i b_isnan     = _mm_cmpgt_epi32(absf_int, f32infty);
+    __m128i b_isnormal  = _mm_cmpgt_epi32(f32infty, _mm_castps_si128(absf));
+    __m128i nanbit      = _mm_and_si128(b_isnan, c_nanbit);
+    __m128i inf_or_nan  = _mm_or_si128(nanbit, c_infty_as_fp16);
+
+    __m128  fnosticky   = _mm_and_ps(absf, mround);
+    __m128  scaled      = _mm_mul_ps(fnosticky, CONSTF(c_magic));
+    __m128  clamped     = _mm_min_ps(scaled, CONSTF(c_clamp)); // logically, we want PMINSD on "biased", but this should gen better code
+    __m128i biased      = _mm_sub_epi32(_mm_castps_si128(clamped), _mm_castps_si128(mround));
+    __m128i shifted     = _mm_srli_epi32(biased, 13);
+    __m128i normal      = _mm_and_si128(shifted, b_isnormal);
+    __m128i not_normal  = _mm_andnot_si128(b_isnormal, inf_or_nan);
+    __m128i joined      = _mm_or_si128(normal, not_normal);
+
+    __m128i sign_shift  = _mm_srli_epi32(_mm_castps_si128(justsign), 16);
+    __m128i final       = _mm_or_si128(joined, sign_shift);
+
+    //pack nicer
+    final = _mm_shufflelo_epi16(final, _MM_SHUFFLE_R(0,2,1,1));
+    final = _mm_shufflehi_epi16(final, _MM_SHUFFLE_R(0,2,1,1));
+    // ~20 SSE2 ops
+    return final;
+
+#undef CONSTF
+}
 
 static inline uint16_t to_half(float f)
 {
+
+    __m128i r = float_to_half_SSE2(_mm_set1_ps(f));
+    int16_t h = _mm_extract_epi16(r, 0);
+    return h;
+}
+
+static inline uint16_t to_half_table(float f)
+{
+
+    //table
     uint32_t x = *((uint32_t*)&f);
-    //uint16_t h = ((x>>16)&0x8000)|((((x&0x7f800000)-0x38000000)>>13)&0x7c00)|((x>>13)&0x03ff);
     uint16_t h = basetable[(x>>23)&0x1ff]+((x&0x007fffff)>>shifttable[(x>>23)&0x1ff]);
     return h;
 }
@@ -1800,11 +1853,46 @@ void convert_to_half_float(float *src, unsigned short *dst, size_t size)
 {
 
     int i;
+
+#if 0
     generate_half_float_tables();
     for (i = 0; i < size; i++) {
-        dst[i] = to_half(src[i]);
+        dst[i] = to_half_table(src[i]);
     }
 
+#else
+
+    float *s_ptr = src;
+    unsigned short *d_ptr = dst;
+    //0.112818
+    for (i=0; i < size/8; i++ ){
+
+        __m128 a_ps = _mm_loadu_ps(s_ptr);
+
+        s_ptr+=4;
+        __m128 b_ps = _mm_loadu_ps(s_ptr);
+        s_ptr+=4;
+
+
+        __m128i a = float_to_half_SSE2(a_ps);
+        __m128i b = float_to_half_SSE2(b_ps);
+
+        a = _mm_shuffle_epi32(a, _MM_SHUFFLE_R(0,2,1,1));
+        b = _mm_shuffle_epi32(b, _MM_SHUFFLE_R(1,1,0,2));
+
+        __m128i r = _mm_or_si128(a, b);
+
+        _mm_storeu_si128((__m128i*)d_ptr, r);
+        d_ptr +=8;
+
+    }
+
+    for (i = 0; i < size % 8; i++) {
+        *d_ptr = to_half(*s_ptr);
+        s_ptr++;
+        d_ptr++;
+    }
+#endif
 }
 
 void shuffle_test()

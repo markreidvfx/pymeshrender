@@ -54,23 +54,23 @@ def save_exr(texture, path):
 def save_image16(texture, path, resize=None):
 
 
-    with ThreadPoolExecutor(max_workers=16) as e:
-        for i in xrange(1):
-            start = time.time()
-            # texture = texture.grow()
-
-            texture = mulithread_texture_grow(e, texture)
-            print "texture grow in %f secs" % (time.time() - start)
+    # with ThreadPoolExecutor(max_workers=16) as e:
+    #     for i in xrange(1):
+    #         start = time.time()
+    #         # texture = texture.grow()
+    #
+    #         texture = mulithread_texture_grow(e, texture)
+    #         print "texture grow in %f secs" % (time.time() - start)
 
 
     start = time.time()
-    texture = texture.resample(texture.width/2, texture.height/2)
-    print "resize in %f secs" % (time.time() - start)
+    # texture = texture.resample(texture.width/2, texture.height/2)
+    # print "resize in %f secs" % (time.time() - start)
 
     print texture.width, texture.height
 
-    save_exr(texture, path)
-    return
+    # save_exr(texture, path)
+    # return
     #print texture.rgba
     start = time.time()
     i = cythonmagick.Image()
@@ -289,13 +289,15 @@ def project3d(abc_path, image_path, dest_path, frame=None, subdiv_level=0, size=
     width = image_texture.width
     height = image_texture.height
 
-    scale = 8
+    scale = 4
     renderer = meshrender.MeshRenderer(1024 * scale, 1024 * scale)
     renderer.bake_projection = True
     renderer.uvspace = True
-    renderer.wireframe = True
+    renderer.wireframe = False
     scene_bounds = np.array(((F_MAX,F_MAX,F_MAX),
                              (F_MIN,F_MIN,F_MIN)), dtype=np.float32)
+
+
     for mesh in abc.mesh_list:
         mesh.time = seconds
 
@@ -324,18 +326,43 @@ def project3d(abc_path, image_path, dest_path, frame=None, subdiv_level=0, size=
 
     viewport_matrix = np.matrix(meshrender.viewport_matrix(width-1, height-1), dtype=np.float32)
 
-    with ThreadPoolExecutor(max_workers=16) as e:
+    result = meshrender.MeshTexture(None, renderer.width, renderer.height)
+    result.clear()
+    sample_coords = []
+    r = 4
+    if r <= 1:
+        sample_coords=[(0,0)]
+    else:
+        for y in range(r):
+            for x in range(r):
+                y_p = float(y + 1)/float(r) - 0.5
+                x_p = float(x + 1)/float(r) - 0.5
+                sample_coords.append((x_p, y_p))
 
+    with ThreadPoolExecutor(max_workers=16) as e:
+        mesh_list = []
         for mesh in abc.mesh_list[:1]:
             rmesh = process_mesh(mesh, persp_matrix,
                                  camera_transform, viewport_matrix, seconds, subdiv_level)
+            mesh_list.append(rmesh)
+        blend = 1.0 / float(len(sample_coords))
 
-            # renderer.render_mesh(rmesh, texture=image_texture)
-            mulithread_render_mesh(e, renderer, rmesh,  texture=image_texture)
+        for samp_x, samp_y in sample_coords:
+            renderer.clear()
+            renderer.sample_offset_x = samp_x
+            renderer.sample_offset_y = samp_y
+            for rmesh in mesh_list:
+                # renderer.render_mesh(rmesh, texture=image_texture)
+                mulithread_render_mesh(e, renderer, rmesh,  texture=image_texture)
+
+            texture = mulithread_texture_grow(e, renderer)
+            result.add(texture, blend)
+        # result.blend(texture, )
+
 
     print "projection rendered in %f secs"% ( time.time() - start)
 
-    save_image16(renderer, dest_path, "%dx%d" % (size, size))
+    save_image16(result, dest_path, None)
 
 if __name__ == "__main__":
 

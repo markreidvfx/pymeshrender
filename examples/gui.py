@@ -263,7 +263,7 @@ class Renderer(QtCore.QObject):
         self.render_threads = ThreadPoolExecutor(max_workers=8)
         self.mesh_threads = ThreadPoolExecutor(max_workers=4)
         self.hide = False
-
+        self.aa_texture = None
         self.camera = Camera()
 
         self.use_abc_cam = False
@@ -303,6 +303,7 @@ class Renderer(QtCore.QObject):
         #print "abc render in %.03f secs" % ( time.time() - start)
         #if frame != self.requested_frame:
         #    return
+
         self.send_result(frame)
 
     def draw_mesh(self, renderer, mesh, rect, texture):
@@ -395,42 +396,85 @@ class Renderer(QtCore.QObject):
             x_tiles = 2
             y_tiles = 2
 
+        mesh_list = []
+
         for f in as_completed(mesh_futures):
             mesh_name, mesh = f.result()
+            mesh_list.append((mesh_name, mesh))
 
-            x_tile_size = renderer.width / x_tiles
-            y_tile_size = renderer.height / y_tiles
+        a_buffer = None;
 
-            minx = 0
-            maxx = x_tile_size
+        sampels_coord =[]
 
-            miny = 0
-            maxy = y_tile_size
-            render_futures = []
 
-            #
-            # if self.bake_projection:
-            #     renderer.render_mesh(mesh, texture=texture)
-            #     continue
+        r = 4
 
-            for y in range(y_tiles):
+        for y in range(r):
+            for x in range(r):
+                y_p = float(y + 1)/float(r) - 0.5
+                x_p = float(x + 1)/float(r) - 0.5
+
+                sampels_coord.append((x_p, y_p))
+
+
+        # sampels_coord = [(-0.5,  0.5), (0.0,  0.5), (0.5,  0.5),
+        #                  (-0.5,  0.0), (0.0,  0.0), (0.5,  0.0),
+        #                  (-0.5, -0.5), (0.0, -0.5), (0.5, -0.5),]
+
+        samples = len(sampels_coord)
+        self.aa_texture = meshrender.MeshTexture(None, renderer.width, renderer.height)
+        self.aa_texture.clear()
+        for i, (offset_x, offset_y) in enumerate(sampels_coord):
+
+            self.renderer.clear()
+
+            self.renderer.sample_offset_x = offset_x
+            self.renderer.sample_offset_y = offset_y
+
+            if self.bake_projection:
+                self.projection_renderer.clear()
+
+            for mesh_name, mesh in mesh_list:
+
+                x_tile_size = renderer.width / x_tiles
+                y_tile_size = renderer.height / y_tiles
+
                 minx = 0
                 maxx = x_tile_size
 
-                for x in range(x_tiles):
-                    rect = [(minx, miny), (maxx-1, maxy-1)]
-                    #print rect
-                    r_future = self.render_threads.submit(self.draw_mesh, renderer, mesh, rect, texture)
-                    render_futures.append(r_future)
+                miny = 0
+                maxy = y_tile_size
+                render_futures = []
 
-                    minx += x_tile_size
-                    maxx += x_tile_size
 
-                miny += y_tile_size
-                maxy += y_tile_size
+                #
+                # if self.bake_projection:
+                #     renderer.render_mesh(mesh, texture=texture)
+                #     continue
 
-            for r_future in as_completed(render_futures):
-                r_future.result()
+                for y in range(y_tiles):
+                    minx = 0
+                    maxx = x_tile_size
+
+                    for x in range(x_tiles):
+                        rect = [(minx, miny), (maxx-1, maxy-1)]
+                        #print rect
+                        r_future = self.render_threads.submit(self.draw_mesh, renderer, mesh, rect, texture)
+                        render_futures.append(r_future)
+
+                        minx += x_tile_size
+                        maxx += x_tile_size
+
+                    miny += y_tile_size
+                    maxy += y_tile_size
+
+                for r_future in as_completed(render_futures):
+                    r_future.result()
+
+            # tex = renderer.grow()
+            tex= renderer.to_texture()
+            self.aa_texture.add(tex, 1.0/ float(samples))
+
 
         if self.bake_projection:
             print "texture bake in %f secs" % (time.time()- render_start)
@@ -464,9 +508,9 @@ class Renderer(QtCore.QObject):
 
         if not self.renderer.uvspace:
             bg_image = read_image_data( self.imageplane % frame, width, height)
-            self.renderer.under(bg_image)
+            self.aa_texture.under(bg_image)
 
-        image_data = self.renderer.bgra
+        image_data = self.aa_texture.bgra # self.renderer.bgra
         #print "image converted in %.04f secs" % ( time.time() - start)
 
         bytesPerPixel = 4

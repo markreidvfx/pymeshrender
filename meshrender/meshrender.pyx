@@ -61,6 +61,8 @@ cdef extern from "core.h" nogil:
     ctypedef struct RenderContext:
         int width
         int height
+        float sample_offset_x
+        float sample_offset_y
         int perspective_correct
         int uvspace
         int projection
@@ -78,10 +80,11 @@ cdef extern from "core.h" nogil:
     cdef void setup_texture_context(Texture *ctx, size_t width, size_t height)
     cdef void free_render_context(RenderContext *ctx)
     cdef void free_texture_context(Texture *ctx)
-    cdef void under(RenderContext *ctx, Texture *tex)
+    cdef void under(Texture *ctx, Texture *tex)
     cdef void copy_texture(Texture *src, Texture *dst)
     cdef void grow_texture(Texture *ctx)
     cdef void grow_texture_new(Texture *ctx, Texture *dst, Rect *clip)
+    cdef void blend_texture(Texture *ctx, Texture *dst, float *amount)
     cdef void load_packed_texture(Texture *ctx,
                      unsigned char *src,
                      size_t width, size_t height, int depth)
@@ -93,6 +96,7 @@ cdef extern from "core.h" nogil:
                      unsigned char *src_a,
                      size_t width, size_t height)
 
+    cdef void clear_texture(Texture *ctx)
     cdef void resample_texture(Texture *src, Texture *dst)
 
     cdef void draw_edge(RenderContext *ctx, int* vert_indices, MeshData* mesh_data, Rect *clip, Texture *tex)
@@ -242,6 +246,10 @@ cdef class MeshTexture(object):
             with nogil:
                 load_packed_texture(&self.ctx, &src[0], width, height, depth)
 
+    def clear(self):
+        with nogil:
+            clear_texture(&self.ctx)
+
     def grow(self, unsigned int amount=16, rect=None, MeshTexture dst_texture=None):
 
         if dst_texture is None:
@@ -273,6 +281,14 @@ cdef class MeshTexture(object):
             resample_texture(&self.ctx, &dst.ctx)
         return dst
 
+    def under(self, MeshTexture tex not None):
+        with nogil:
+            under(&self.ctx, &tex.ctx)
+
+    def add(self, MeshTexture texture not None, float amount= 0.5):
+        with nogil:
+            blend_texture(&self.ctx, &texture.ctx, &amount)
+
     property rgba:
         @cython.boundscheck(False)
         def __get__(self):
@@ -285,6 +301,26 @@ cdef class MeshTexture(object):
                 texture_context_to_rgba(&self.ctx, d)
 
             return data
+
+    property bgra:
+        @cython.boundscheck(False)
+        def __get__(self):
+            cdef unsigned char[:,:,:] data = view.array(shape=(self.height,self.width, 4), itemsize=sizeof(unsigned char), format="B")
+            cdef int size = self.width * self.height
+            cdef int i
+
+            cdef unsigned char *d = <unsigned char *>&data[0][0][0]
+
+            cdef Texture tex;
+            tex = self.ctx;
+            tex.r = self.ctx.b;
+            tex.b = self.ctx.r;
+
+            with nogil:
+                texture_context_to_rgba(&tex, d)
+
+            return bytearray(data)
+
     property r:
         @cython.boundscheck(False)
         def __get__(self):
@@ -468,7 +504,7 @@ cdef class MeshRenderer(object):
 
     def under(self, MeshTexture tex not None):
         with nogil:
-            under(&self.ctx, &tex.ctx)
+            under(&self.ctx.img, &tex.ctx)
 
     def grow(self, unsigned int amount=16, rect=None, MeshTexture dst_texture=None):
 
@@ -591,6 +627,13 @@ cdef class MeshRenderer(object):
 
             return data
 
+    property sample_offset_x:
+        def __set__(self, float value):
+            self.ctx.sample_offset_x = value
+
+    property sample_offset_y:
+        def __set__(self, float value):
+            self.ctx.sample_offset_y = value
 
     property checker_size:
         def __set__(self, int value):

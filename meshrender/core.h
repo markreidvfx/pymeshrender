@@ -84,6 +84,8 @@ typedef struct {
 typedef struct {
     size_t width;
     size_t height;
+    float sample_offset_x;
+    float sample_offset_y;
     int perspective_correct;
     int uvspace;
     int projection;

@@ -67,6 +67,10 @@ void setup_render_context(RenderContext *ctx, size_t width, size_t height)
     ctx->img.width = width;
     ctx->img.height = height;
 
+    float sample_offset = 0.0;
+    ctx->sample_offset_x = sample_offset;
+    ctx->sample_offset_y = sample_offset;
+
     if (ctx->mem)
         free_render_context(ctx);
 
@@ -204,9 +208,40 @@ void load_texure(Texture *ctx,
     }
 }
 
-void under(RenderContext *rctx, Texture *tex)
+void clear_texture(Texture *ctx)
 {
-    Texture *ctx  = &rctx->img;
+    size_t size = ctx->width * ctx->height * 4 * sizeof(float);
+    memset(ctx->r, 0, size);
+}
+
+void blend_texture(Texture *ctx, Texture *dst, float *amount)
+{
+    int i;
+
+    size_t size = ctx->width * ctx->height * 4;
+    __m128 amount4x = _mm_set1_ps(*amount);
+
+    float *a = ctx->r;;
+    float *b = dst->r;
+
+    for (i = 0; i < size; i+=4) {
+
+        __m128 a4x = _mm_load_ps(a);
+        __m128 b4x = _mm_load_ps(b);
+
+        b4x = _mm_mul_ps(b4x, amount4x);
+
+        a4x = _mm_add_ps(a4x, b4x);
+        //a4x = _mm_add_ps(_mm_mul_ps(a4x, a_blend4x), _mm_mul_ps(b4x, b_blend4x));
+        _mm_store_ps(a, a4x);
+
+        a+=4;
+        b+=4;
+    }
+}
+
+void under(Texture *ctx, Texture *tex)
+{
     size_t x = 0;
     size_t y = 0;
     size_t y_max = MIN(tex->height, ctx->height);
@@ -230,12 +265,12 @@ void under(RenderContext *rctx, Texture *tex)
         for (x = 0; x < x_max; x++) {
 
             float alpha = *a;
-
+            alpha = 1.0f - alpha;
             //alpha *= .5;
 
-            *r = alpha*(*r) + (1-alpha) *  (*s_r);
-            *g = alpha*(*g) + (1-alpha) *  (*s_g);
-            *b = alpha*(*b) + (1-alpha) *  (*s_b);
+            *r = (*r) + (alpha * (*s_r));
+            *g = (*g) + (alpha * (*s_g));
+            *b = (*b) + (alpha * (*s_b));
             *a = *s_a;
             //printf("%f\n", *s_r );
 
@@ -392,7 +427,7 @@ static inline __m128 pix_shift_right(__m128 a, __m128 b)
 static inline void grow_texture_left_right(Texture *ctx, int right)
 {
     __m128 one  = _mm_set1_ps(1);
-    __m128 zero = _mm_set1_ps(0);
+    __m128 zero = _mm_setzero_ps();
 
     int offset = 4;
     if (right)
@@ -716,6 +751,9 @@ static inline vec4 get_tex_color_linear(const Texture *tex, vec2 uv)
 
     float x = (uv.x) * (float)width;
     float y = (1.0f - uv.y) * (float)height;
+
+    // x -= 0.5f;
+    // y -= 0.5f;
 
     int px = (int)(x); //floor
     int py = (int)(y); //floor
@@ -1244,21 +1282,28 @@ void draw_triangle(RenderContext *ctx, Triangle *tri, const Rect *clip, const Te
     m128vec4 v1x4 = set1_m128vec4(v1);
     m128vec4 v2x4 = set1_m128vec4(v2);
 
+    __m128 sample_offset_x = _mm_set1_ps(ctx->sample_offset_x);
+    __m128 sample_offset_y = _mm_set1_ps(ctx->sample_offset_y);
+
     vec4 p;
     m128vec4 px4;
+    m128vec4 samp_px4;
     int i,x,y;
     for (y = min_y; y <= max_y; y+=2) {
 
         px4.x = _mm_add_ps(_mm_set1_ps(min_x), _mm_setr_ps(0,1,0,1));
         px4.y = _mm_add_ps(_mm_set1_ps(y), _mm_setr_ps(0,0,1,1));
-
         px4.y = _mm_min_ps(px4.y , _mm_set1_ps(clip->max.y));
         //p.y = y;
 
         for (x = min_x; x <= max_x; x+=2) {
-            __m128 w0x4 = halfedge_x4(&v1x4, &v2x4, &px4);
-            __m128 w1x4 = halfedge_x4(&v2x4, &v0x4, &px4);
-            __m128 w2x4 = halfedge_x4(&v0x4, &v1x4, &px4);
+
+            samp_px4.x = _mm_add_ps(px4.x, sample_offset_x);
+            samp_px4.y = _mm_add_ps(px4.y, sample_offset_y);
+
+            __m128 w0x4 = halfedge_x4(&v1x4, &v2x4, &samp_px4);
+            __m128 w1x4 = halfedge_x4(&v2x4, &v0x4, &samp_px4);
+            __m128 w2x4 = halfedge_x4(&v0x4, &v1x4, &samp_px4);
 
             __m128 inside4x = _mm_and_ps(_mm_cmpge_ps(w0x4, zero),
                               _mm_and_ps(_mm_cmpge_ps(w1x4, zero),
@@ -1779,9 +1824,6 @@ static inline __m128i float_to_half_SSE2(__m128 f)
     __m128i sign_shift  = _mm_srli_epi32(_mm_castps_si128(justsign), 16);
     __m128i final       = _mm_or_si128(joined, sign_shift);
 
-    //pack nicer
-    final = _mm_shufflelo_epi16(final, _MM_SHUFFLE_R(0,2,1,1));
-    final = _mm_shufflehi_epi16(final, _MM_SHUFFLE_R(0,2,1,1));
     // ~20 SSE2 ops
     return final;
 
@@ -1864,6 +1906,18 @@ void convert_to_half_float(float *src, unsigned short *dst, size_t size)
 
     float *s_ptr = src;
     unsigned short *d_ptr = dst;
+
+    __m128 shuffle_a = _mm_setr_epi8(0,   1,
+                                     4,   5,
+                                     8,   9,
+                                     12, 13,
+                                     2,2, 2,2, 2,2, 2,2);
+    __m128 shuffle_b = _mm_setr_epi8(2,2, 2,2, 2,2, 2,2,
+                                     0,   1,
+                                     4,   5,
+                                     8,   9,
+                                     12, 13);
+
     //0.112818
     for (i=0; i < size/8; i++ ){
 
@@ -1877,8 +1931,22 @@ void convert_to_half_float(float *src, unsigned short *dst, size_t size)
         __m128i a = float_to_half_SSE2(a_ps);
         __m128i b = float_to_half_SSE2(b_ps);
 
+#define SSE3 1
+
+#if SSE3
+        a = _mm_shuffle_epi8(a, shuffle_a);
+        b = _mm_shuffle_epi8(b, shuffle_b);
+
+#else
+        //pack nicer
+        a = _mm_shufflelo_epi16(a, _MM_SHUFFLE_R(0,2,1,1));
+        a = _mm_shufflehi_epi16(a, _MM_SHUFFLE_R(0,2,1,1));
         a = _mm_shuffle_epi32(a, _MM_SHUFFLE_R(0,2,1,1));
+
+        b = _mm_shufflelo_epi16(b, _MM_SHUFFLE_R(0,2,1,1));
+        b = _mm_shufflehi_epi16(b, _MM_SHUFFLE_R(0,2,1,1));
         b = _mm_shuffle_epi32(b, _MM_SHUFFLE_R(1,1,0,2));
+#endif
 
         __m128i r = _mm_or_si128(a, b);
 

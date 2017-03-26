@@ -416,6 +416,9 @@ class Renderer(QtCore.QObject):
 
                 sampels_coord.append((x_p, y_p))
 
+        if r == 1:
+            sampels_coord = [(0,0)]
+
 
         # sampels_coord = [(-0.5,  0.5), (0.0,  0.5), (0.5,  0.5),
         #                  (-0.5,  0.0), (0.0,  0.0), (0.5,  0.0),

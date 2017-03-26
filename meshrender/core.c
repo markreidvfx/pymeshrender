@@ -242,49 +242,84 @@ void blend_texture(Texture *ctx, Texture *dst, float *amount)
 
 void under(Texture *ctx, Texture *tex)
 {
-    size_t x = 0;
-    size_t y = 0;
-    size_t y_max = MIN(tex->height, ctx->height);
-    size_t x_max = MIN(ctx->width, tex->width);
 
-    for (y = 0; y < y_max; y++) {
+    // size_t y_max = MIN(tex->height, ctx->height);
+    // size_t x_max = MIN(ctx->width, tex->width);
 
-        size_t offset = y * (ctx->width);
-        float *r = ctx->r + offset;
-        float *g = ctx->g + offset;
-        float *b = ctx->b + offset;
-        float *a = ctx->a + offset;
+    size_t size = ctx->width * ctx->height;
 
-        size_t tex_offset = y * (tex->width);
+    float *a[3];
+    float *b[3];
 
-        float *s_r = tex->r + tex_offset;
-        float *s_g = tex->g + tex_offset;
-        float *s_b = tex->b + tex_offset;
-        float *s_a = tex->a + tex_offset;
+    b[0] = tex->r;
+    b[1] = tex->g;
+    b[2] = tex->b;
 
-        for (x = 0; x < x_max; x++) {
+    a[0] = ctx->r;
+    a[1] = ctx->g;
+    a[2] = ctx->b;
 
-            float alpha = *a;
-            alpha = 1.0f - alpha;
-            //alpha *= .5;
+    float *alpha = ctx->a;
+    int i, j;
 
-            *r = (*r) + (alpha * (*s_r));
-            *g = (*g) + (alpha * (*s_g));
-            *b = (*b) + (alpha * (*s_b));
-            *a = *s_a;
-            //printf("%f\n", *s_r );
+    __m128 one = _mm_set1_ps(1.0f);
 
-            s_r++;
-            s_g++;
-            s_b++;
-            s_a++;
-            r++;
-            g++;
-            b++;
-            a++;
+    for (i = 0; i < size/4; i++) {
+        __m128 inv_alpha = _mm_sub_ps(one, _mm_load_ps(alpha));
+
+        for (j = 0; j < 3; j++){
+            __m128 a4x = _mm_load_ps(a[j]);
+            __m128 b4x = _mm_load_ps(b[j]);
+            a4x = _mm_add_ps(a4x, _mm_mul_ps(inv_alpha, b4x));
+            _mm_store_ps(a[j], a4x);
+
+            a[j] +=4;
+            b[j] +=4;
+
         }
 
+        alpha+=4;
+
     }
+
+    // for (y = 0; y < y_max; y++) {
+
+    //     size_t offset = y * (ctx->width);
+    //     float *r = ctx->r + offset;
+    //     float *g = ctx->g + offset;
+    //     float *b = ctx->b + offset;
+    //     float *a = ctx->a + offset;
+    //
+    //     size_t tex_offset = y * (tex->width);
+    //
+    //     float *s_r = tex->r + tex_offset;
+    //     float *s_g = tex->g + tex_offset;
+    //     float *s_b = tex->b + tex_offset;
+    //     float *s_a = tex->a + tex_offset;
+    //
+    //     for (x = 0; x < x_max; x++) {
+    //
+    //         float alpha = *a;
+    //         alpha = 1.0f - alpha;
+    //         //alpha *= .5;
+    //
+    //         *r = (*r) + (alpha * (*s_r));
+    //         *g = (*g) + (alpha * (*s_g));
+    //         *b = (*b) + (alpha * (*s_b));
+    //         *a = *s_a;
+    //         //printf("%f\n", *s_r );
+    //
+    //         s_r++;
+    //         s_g++;
+    //         s_b++;
+    //         s_a++;
+    //         r++;
+    //         g++;
+    //         b++;
+    //         a++;
+    //     }
+    //
+    // }
 
 }
 

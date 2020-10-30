@@ -1942,16 +1942,16 @@ void convert_to_half_float(float *src, unsigned short *dst, size_t size)
     float *s_ptr = src;
     unsigned short *d_ptr = dst;
 
-    __m128 shuffle_a = _mm_setr_epi8(0,   1,
+    __m128 shuffle_a = _mm_castsi128_ps(_mm_setr_epi8(0,   1,
                                      4,   5,
                                      8,   9,
                                      12, 13,
-                                     2,2, 2,2, 2,2, 2,2);
-    __m128 shuffle_b = _mm_setr_epi8(2,2, 2,2, 2,2, 2,2,
+                                     2,2, 2,2, 2,2, 2,2));
+    __m128 shuffle_b = _mm_castsi128_ps(_mm_setr_epi8(2,2, 2,2, 2,2, 2,2,
                                      0,   1,
                                      4,   5,
                                      8,   9,
-                                     12, 13);
+                                     12, 13));
 
     //0.112818
     for (i=0; i < size/8; i++ ){
@@ -1966,13 +1966,6 @@ void convert_to_half_float(float *src, unsigned short *dst, size_t size)
         __m128i a = float_to_half_SSE2(a_ps);
         __m128i b = float_to_half_SSE2(b_ps);
 
-#define SSE3 1
-
-#if SSE3
-        a = _mm_shuffle_epi8(a, shuffle_a);
-        b = _mm_shuffle_epi8(b, shuffle_b);
-
-#else
         //pack nicer
         a = _mm_shufflelo_epi16(a, _MM_SHUFFLE_R(0,2,1,1));
         a = _mm_shufflehi_epi16(a, _MM_SHUFFLE_R(0,2,1,1));
@@ -1981,7 +1974,7 @@ void convert_to_half_float(float *src, unsigned short *dst, size_t size)
         b = _mm_shufflelo_epi16(b, _MM_SHUFFLE_R(0,2,1,1));
         b = _mm_shufflehi_epi16(b, _MM_SHUFFLE_R(0,2,1,1));
         b = _mm_shuffle_epi32(b, _MM_SHUFFLE_R(1,1,0,2));
-#endif
+
 
         __m128i r = _mm_or_si128(a, b);
 
